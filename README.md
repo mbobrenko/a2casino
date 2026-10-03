@@ -47,7 +47,10 @@ loadtest/    нагрузочный тест кошелька (k6)
 
 ## Сервер с живой ссылкой
 
-См. [deploy/README.md](deploy/README.md): Hetzner Cloud, HTTPS и автообновление из GitHub.
+**Бесплатно на Render:** `render.yaml` в корне. В Render: New → Blueprint → репозиторий `a2casino` → Apply
+(попросит пароль админа). Сервисы засыпают через 15 минут без трафика, бесплатная база живёт 30 дней.
+
+**Свой сервер:** См. [deploy/README.md](deploy/README.md): Hetzner Cloud, HTTPS и автообновление из GitHub.
 
 ## Разработка без Docker
 
