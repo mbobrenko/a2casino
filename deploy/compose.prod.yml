@@ -1,0 +1,49 @@
+# Server overrides: docker compose -f docker-compose.yml -f deploy/compose.prod.yml up -d --build
+# Values come from the .env file next to docker-compose.yml (written by cloud-init.yaml).
+#   https://casino.${DOMAIN}  player site
+#   https://admin.${DOMAIN}   back office
+#   https://api.${DOMAIN}     API
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  postgres:
+    <<: *restart
+
+  api:
+    <<: *restart
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      PUBLIC_URL: ${SCHEME:-https}://api.${DOMAIN:?set DOMAIN in .env}
+      WEB_URL: ${SCHEME:-https}://casino.${DOMAIN}
+      CORS_ORIGINS: ${SCHEME:-https}://casino.${DOMAIN},${SCHEME:-https}://admin.${DOMAIN}
+      MOCK_PROVIDER_SECRET: ${MOCK_PROVIDER_SECRET:?set in .env}
+      PSP_WEBHOOK_SECRET: ${PSP_WEBHOOK_SECRET:?set in .env}
+      CRYPTO_WEBHOOK_SECRET: ${CRYPTO_WEBHOOK_SECRET:?set in .env}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@a2casino.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+
+  web:
+    <<: *restart
+    build:
+      args: { NEXT_PUBLIC_API_URL: "${SCHEME:-https}://api.${DOMAIN}" }
+
+  backoffice:
+    <<: *restart
+    build:
+      args: { NEXT_PUBLIC_API_URL: "${SCHEME:-https}://api.${DOMAIN}" }
+
+  caddy:
+    <<: *restart
+    image: caddy:2-alpine
+    depends_on: [api, web, backoffice]
+    environment:
+      DOMAIN: ${DOMAIN}
+      SCHEME: ${SCHEME:-https}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+
+volumes:
+  caddy_data:

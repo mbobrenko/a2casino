@@ -1,0 +1,90 @@
+#cloud-config
+# A2Casino demo server: paste this whole file into Hetzner Cloud -> Create server -> "Cloud config".
+# Before pasting, replace the two values in the "FILL IN" block below.
+# Ubuntu 24.04, 4 vCPU / 8 GB RAM recommended. Setup takes ~10 minutes after the server starts.
+
+write_files:
+  - path: /root/a2casino-settings.sh
+    permissions: "0600"
+    content: |
+      # ===== FILL IN =====
+      # Read-only GitHub token for mbobrenko/a2casino (fine-grained token, Contents: Read-only).
+      GITHUB_TOKEN="PASTE_GITHUB_TOKEN_HERE"
+      # Password for the back office login admin@a2casino.local (at least 10 characters).
+      ADMIN_PASSWORD="PASTE_ADMIN_PASSWORD_HERE"
+      # ===================
+
+  - path: /root/a2casino-install.sh
+    permissions: "0700"
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/a2casino-install.log) 2>&1
+      . /root/a2casino-settings.sh
+
+      # Swap helps the Next.js builds on small servers.
+      if [ ! -f /swapfile ]; then
+        fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+        echo '/swapfile none swap sw 0 0' >> /etc/fstab
+      fi
+
+      command -v docker >/dev/null || curl -fsSL https://get.docker.com | sh
+
+      if [ ! -d /opt/a2casino/.git ]; then
+        git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/mbobrenko/a2casino.git" /opt/a2casino
+      fi
+      cd /opt/a2casino
+
+      IP=$(curl -fs http://169.254.169.254/hetzner/v1/metadata/public-ipv4 || curl -fs https://api.ipify.org)
+      DOMAIN="$(echo "$IP" | tr . -).sslip.io"
+      if [ ! -f .env ]; then
+        cat > .env <<ENV
+      DOMAIN=${DOMAIN}
+      SCHEME=https
+      POSTGRES_PASSWORD=$(openssl rand -hex 24)
+      JWT_SECRET=$(openssl rand -hex 32)
+      MOCK_PROVIDER_SECRET=$(openssl rand -hex 24)
+      PSP_WEBHOOK_SECRET=$(openssl rand -hex 24)
+      CRYPTO_WEBHOOK_SECRET=$(openssl rand -hex 24)
+      ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      ENV
+        chmod 600 .env
+      fi
+
+      sh deploy/update.sh --force
+
+      cat > /etc/motd <<MOTD
+      A2Casino demo
+        Player site:  https://casino.${DOMAIN}
+        Back office:  https://admin.${DOMAIN}   (admin@a2casino.local)
+        API:          https://api.${DOMAIN}/healthz
+        Code: /opt/a2casino   Auto-update: systemctl status a2casino-update.timer
+      MOTD
+      echo "A2Casino is up: https://casino.${DOMAIN}"
+
+  - path: /etc/systemd/system/a2casino-update.service
+    content: |
+      [Unit]
+      Description=Pull A2Casino from GitHub and redeploy if it changed
+      After=docker.service network-online.target
+      [Service]
+      Type=oneshot
+      ExecStart=/bin/sh /opt/a2casino/deploy/update.sh
+
+  - path: /etc/systemd/system/a2casino-update.timer
+    content: |
+      [Unit]
+      Description=Check GitHub for A2Casino updates every 5 minutes
+      [Timer]
+      OnBootSec=3min
+      OnUnitActiveSec=5min
+      [Install]
+      WantedBy=timers.target
+
+package_update: true
+packages: [git, curl, openssl]
+
+runcmd:
+  - [bash, /root/a2casino-install.sh]
+  - [systemctl, daemon-reload]
+  - [systemctl, enable, --now, a2casino-update.timer]

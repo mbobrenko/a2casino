@@ -45,6 +45,10 @@ docs/API.md  контракт API
 loadtest/    нагрузочный тест кошелька (k6)
 ```
 
+## Сервер с живой ссылкой
+
+См. [deploy/README.md](deploy/README.md): Hetzner Cloud, HTTPS и автообновление из GitHub.
+
 ## Разработка без Docker
 
 Нужны Go 1.26+, Node 22+, PostgreSQL 16.

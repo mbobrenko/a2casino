@@ -1,0 +1,16 @@
+# Reverse proxy with automatic HTTPS (Let's Encrypt). DOMAIN is e.g. 1-2-3-4.sslip.io,
+# a free wildcard DNS name that points at the server's IP, so no domain purchase is needed.
+{$SCHEME}://casino.{$DOMAIN} {
+	encode gzip
+	reverse_proxy web:3000
+}
+
+{$SCHEME}://admin.{$DOMAIN} {
+	encode gzip
+	reverse_proxy backoffice:3001
+}
+
+{$SCHEME}://api.{$DOMAIN} {
+	encode gzip
+	reverse_proxy api:8080
+}
