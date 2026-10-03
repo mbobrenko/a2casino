@@ -1,0 +1,49 @@
+# Local dev stack: docker compose up --build
+#   player site  http://localhost:3000
+#   back office  http://localhost:3001  (admin@a2casino.local / admin12345)
+#   API          http://localhost:8080
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: casino
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      retries: 30
+
+  api:
+    build: ./backend
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/casino?sslmode=disable
+      JWT_SECRET: dev-secret-change-me
+      # Browser-facing URL (mock provider iframe, mock PSP checkout).
+      PUBLIC_URL: http://localhost:8080
+      # Where the mock provider/PSP call the casino back; inside this container that is itself.
+      CALLBACK_URL: http://localhost:8080
+      WEB_URL: http://localhost:3000
+      CORS_ORIGINS: http://localhost:3000,http://localhost:3001
+      DEV_TOOLS: "true"
+    ports: ["8080:8080"]
+
+  web:
+    build:
+      context: ./web
+      args: { NEXT_PUBLIC_API_URL: http://localhost:8080 }
+    depends_on: [api]
+    ports: ["3000:3000"]
+
+  backoffice:
+    build:
+      context: ./backoffice
+      args: { NEXT_PUBLIC_API_URL: http://localhost:8080 }
+    depends_on: [api]
+    ports: ["3001:3001"]
+
+volumes:
+  pgdata:
