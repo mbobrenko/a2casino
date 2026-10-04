@@ -64,6 +64,8 @@ export interface PlayerCard {
   player: Player;
   balance: Balance;
   stats: PlayerStats;
+  vip?: VipStatus | null;
+  vip_name?: string | null;
 }
 
 export interface Round {
@@ -132,4 +134,138 @@ export interface Withdrawal {
 
 export interface Items<T> {
   items: T[] | null;
+}
+
+/* ---------- v0.2: catalog & marketing ---------- */
+
+export interface VipStatus {
+  level: number;
+  points: number;
+  cashback_available: number;
+  cashback_from: string | null;
+  net_loss: number;
+  rakeback_available: number;
+}
+
+export interface BoGame {
+  id: number;
+  slug: string;
+  title: string;
+  provider: string;
+  studio: string;
+  category: string;
+  status: string;
+  rtp: number;
+  sort_order: number;
+  is_new: boolean;
+  blocked_countries: string[] | null;
+  tags: string[] | null;
+  emoji: string;
+  color: string;
+  rounds_30d: number;
+  turnover_30d: number;
+  ggr_30d: number;
+}
+
+export interface BoProvider {
+  code: string;
+  title: string;
+  status: string;
+  blocked_countries: string[] | null;
+  sort_order: number;
+  games: number;
+}
+
+export interface Bonus {
+  id: number;
+  title: string;
+  description: string;
+  kind: string;
+  trigger: string;
+  percent: number;
+  max_amount: number;
+  fixed_amount: number;
+  min_deposit: number;
+  wager_multiplier: number;
+  freespins_count: number;
+  freespin_value: number;
+  freespin_game: string;
+  valid_days: number;
+  active: boolean;
+}
+
+export interface BoBonus extends Bonus {
+  given: number;
+  active_count: number;
+  completed: number;
+  granted_sum: number;
+}
+
+export interface PromoCode {
+  code: string;
+  bonus_id: number;
+  bonus_title: string;
+  bonus_kind: string;
+  max_uses: number;
+  uses: number;
+  expires_at: string | null;
+  active: boolean;
+  created_at: string;
+}
+
+export interface VipLevel {
+  level: number;
+  name: string;
+  min_points: number;
+  cashback_pct: number;
+  rakeback_pct: number;
+  perks: string;
+  players: number;
+}
+
+export interface Banner {
+  id: number;
+  title: string;
+  subtitle: string;
+  cta_text: string;
+  cta_link: string;
+  color: string;
+  emoji: string;
+  sort_order: number;
+  active: boolean;
+  countries: string[] | null;
+  starts_at: string | null;
+  ends_at: string | null;
+}
+
+export interface GlobalAuditEntry {
+  id: number;
+  action: string;
+  player_id: string | null;
+  player_email: string | null;
+  staff_email: string | null;
+  before: Json | null;
+  after: Json | null;
+  comment: string;
+  created_at: string;
+}
+
+export interface PlayerBonus {
+  id: number;
+  bonus_id: number;
+  title: string;
+  description: string;
+  kind: string;
+  status: string;
+  source: string;
+  amount: number;
+  wager_required: number;
+  wager_progress: number;
+  freespins_left: number;
+  freespins_won: number;
+  freespin_game: string;
+  min_deposit: number;
+  created_at: string;
+  expires_at: string | null;
+  finished_at: string | null;
 }

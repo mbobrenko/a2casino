@@ -1,60 +1,118 @@
 "use client";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, Game } from "@/lib/api";
+import { useMe } from "@/lib/useMe";
+import BannerCarousel, { Banner } from "@/components/BannerCarousel";
+import GameTile from "@/components/GameTile";
 
-const categoryNames: Record<string, string> = {
-  "": "Все", slots: "Слоты", crash: "Краш", table: "Настольные", instant: "Инстант", dice: "Кости",
-};
-const art: Record<string, { icon: string; bg: string }> = {
-  slots: { icon: "🎰", bg: "linear-gradient(135deg,#5b21b6,#db2777)" },
-  crash: { icon: "🚀", bg: "linear-gradient(135deg,#0f766e,#22d3ee)" },
-  table: { icon: "🎡", bg: "linear-gradient(135deg,#166534,#4ade80)" },
-  instant: { icon: "🎟️", bg: "linear-gradient(135deg,#b45309,#facc15)" },
-  dice: { icon: "🎲", bg: "linear-gradient(135deg,#1e3a8a,#7c5cff)" },
+type Facet = { code: string; title: string; games: number };
+type Lobby = {
+  banners: Banner[]; categories: Facet[]; providers: Facet[];
+  popular: Game[]; new: Game[]; recommended: Game[]; recent: Game[];
 };
 
-export default function Lobby() {
-  const [games, setGames] = useState<Game[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
+export default function LobbyPage() {
+  const { me, ready } = useMe();
+  const [lobby, setLobby] = useState<Lobby | null>(null);
+  const [games, setGames] = useState<Game[] | null>(null);
   const [cat, setCat] = useState("");
+  const [studio, setStudio] = useState("");
+  const [q, setQ] = useState("");
+  const [query, setQuery] = useState("");
   const [error, setError] = useState("");
 
+  // api() attaches the player token itself, so recommended/recent become personal once logged in.
   useEffect(() => {
-    api<{ games: Game[]; categories: string[] }>("/api/games")
-      .then((d) => { setGames(d.games); setCategories(d.categories); })
-      .catch((e) => setError(e.message));
-  }, []);
+    if (!ready) return;
+    api<Lobby>("/api/lobby").then(setLobby).catch((e) => setError(e.message));
+  }, [ready, me?.id]);
 
-  const shown = games.filter((g) => !cat || g.category === cat);
-  const present = new Set(games.map((g) => g.category));
+  // Debounce typing in the search box.
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(q.trim()), 300);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  useEffect(() => {
+    let live = true;
+    const p = new URLSearchParams();
+    if (query) p.set("q", query);
+    if (cat) p.set("category", cat);
+    if (studio) p.set("studio", studio);
+    api<{ games: Game[] }>("/api/games" + (p.toString() ? "?" + p : ""))
+      .then((d) => live && setGames(d.games))
+      .catch((e) => live && setError(e.message));
+    return () => { live = false; };
+  }, [query, cat, studio]);
+
+  const studios: Record<string, string> = {};
+  lobby?.providers.forEach((p) => { studios[p.code] = p.title; });
+  const total = lobby?.categories.reduce((s, c) => s + c.games, 0) ?? 0;
+  const filtered = !!(query || cat || studio);
+
+  const row = (title: string, list: Game[] | undefined, icon: string) =>
+    list && list.length > 0 && (
+      <section className="section">
+        <div className="section-head"><h2>{icon} {title}</h2><span className="muted">{list.length}</span></div>
+        <div className="hrow">
+          {list.map((g) => <GameTile key={g.id} game={g} studio={studios[g.studio]} />)}
+        </div>
+      </section>
+    );
 
   return (
     <>
-      <section className="hero">
-        <h1>Добро пожаловать в A2Casino</h1>
-        <div>Слоты, настольные игры и кости с доказуемо честным результатом. Депозит картой или в USDT.</div>
-      </section>
-      <div className="tabs">
-        {["", ...categories].filter((c) => !c || present.has(c)).map((c) => (
-          <button key={c} className={"tab" + (cat === c ? " active" : "")} onClick={() => setCat(c)}>
-            {categoryNames[c] ?? c}
+      {lobby ? <BannerCarousel banners={lobby.banners} /> : <div className="carousel skeleton" />}
+
+      <div className="lobby-bar">
+        <div className="tabs scroll">
+          <button className={"tab" + (cat === "" ? " active" : "")} onClick={() => setCat("")}>
+            Все <span className="count">{total}</span>
           </button>
-        ))}
+          {lobby?.categories.filter((c) => c.games > 0).map((c) => (
+            <button key={c.code} className={"tab" + (cat === c.code ? " active" : "")} onClick={() => setCat(c.code)}>
+              {c.title} <span className="count">{c.games}</span>
+            </button>
+          ))}
+        </div>
+        <input className="search" type="search" placeholder="🔍 Поиск игры" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
+
+      {lobby && lobby.providers.length > 0 && (
+        <div className="chips">
+          {lobby.providers.map((p) => (
+            <button key={p.code} className={"chip" + (studio === p.code ? " active" : "")}
+              onClick={() => setStudio(studio === p.code ? "" : p.code)}>
+              {p.title} <span className="count">{p.games}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {error && <p className="error">{error}</p>}
-      <div className="grid">
-        {shown.map((g) => (
-          <Link key={g.id} href={`/game/${g.slug}`} className="game">
-            {g.is_new && <span className="badge">NEW</span>}
-            <div className="art" style={{ background: art[g.category]?.bg }}>{art[g.category]?.icon ?? "🎮"}</div>
-            <div className="info">
-              <div className="title">{g.title}</div>
-              <div className="meta">{categoryNames[g.category]} · {g.provider === "originals" ? "A2 Originals" : "Mock Provider"}{g.rtp ? ` · RTP ${g.rtp}%` : ""}</div>
-            </div>
-          </Link>
-        ))}
-      </div>
+
+      {!filtered && lobby && (
+        <>
+          {me && row("Недавние игры", lobby.recent, "🕘")}
+          {row("Рекомендуем вам", lobby.recommended, "✨")}
+          {row("Популярное", lobby.popular, "🔥")}
+          {row("Новинки", lobby.new, "🆕")}
+        </>
+      )}
+
+      <section className="section">
+        <div className="section-head">
+          <h2>{filtered ? "Результаты" : "Все игры"}</h2>
+          {games && <span className="muted">{games.length}</span>}
+          {filtered && (
+            <button className="link-btn" onClick={() => { setCat(""); setStudio(""); setQ(""); }}>Сбросить фильтры</button>
+          )}
+        </div>
+        {games && games.length === 0 && <p className="muted">Ничего не найдено. Попробуйте изменить запрос или фильтры.</p>}
+        <div className="grid">
+          {games?.map((g) => <GameTile key={g.id} game={g} studio={studios[g.studio]} />)}
+        </div>
+      </section>
     </>
   );
 }

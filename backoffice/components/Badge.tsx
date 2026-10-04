@@ -36,3 +36,8 @@ export function Tags({ tags }: { tags: string[] | null | undefined }) {
     </span>
   );
 }
+
+export function Codes({ codes }: { codes: string[] | null | undefined }) {
+  if (!codes || codes.length === 0) return <span className="muted">—</span>;
+  return <span className="mono small">{codes.join(", ")}</span>;
+}

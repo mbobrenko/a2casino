@@ -11,6 +11,8 @@ export interface ActionModalProps {
   requireComment?: boolean;
   confirmLabel?: string;
   danger?: boolean;
+  /** Wider dialog for forms. */
+  wide?: boolean;
   /** Throw to show an error inside the modal. */
   onSubmit: (comment: string) => Promise<void>;
   onClose: () => void;
@@ -23,6 +25,7 @@ export default function ActionModal({
   requireComment = true,
   confirmLabel = "Подтвердить",
   danger,
+  wide,
   onSubmit,
   onClose,
 }: ActionModalProps) {
@@ -31,14 +34,21 @@ export default function ActionModal({
   const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
 
+  const hasFields = !!children;
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  // Mount only: forms with their own fields focus their first input; plain confirmations focus the comment.
+  // (Re-running this on every parent render would steal focus from the field being typed in.)
   useEffect(() => {
-    ref.current?.focus();
+    if (!hasFields) ref.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") closeRef.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -60,7 +70,7 @@ export default function ActionModal({
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
-      <form className="modal" onSubmit={submit}>
+      <form className={`modal${wide ? " modal-wide" : ""}`} onSubmit={submit}>
         <h3>{title}</h3>
         {description && <div className="modal-desc">{description}</div>}
         {children}

@@ -5,16 +5,31 @@ import { useParams } from "next/navigation";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import ActionModal from "@/components/ActionModal";
 import { Badge, StatusBadge, VerificationBadge } from "@/components/Badge";
+import AuditDiff from "@/components/AuditDiff";
 import Tile from "@/components/Tile";
 import { api, errMsg } from "@/lib/api";
-import { VERIFICATIONS, VERIFICATION_LABELS, dollarsToCents, dt, money, shortJson } from "@/lib/format";
-import type { AuditEntry, Items, LedgerTx, Payment, PlayerCard, Round } from "@/lib/types";
+import {
+  AUDIT_ACTION_LABELS,
+  BONUS_KIND_LABELS,
+  BONUS_SOURCE_LABELS,
+  BONUS_TRIGGER_LABELS,
+  VERIFICATIONS,
+  VERIFICATION_LABELS,
+  bonusTerms,
+  dollarsToCents,
+  dt,
+  int,
+  money,
+  shortJson,
+} from "@/lib/format";
+import type { AuditEntry, BoBonus, Items, LedgerTx, Payment, PlayerBonus, PlayerCard, Round } from "@/lib/types";
 
-type Tab = "rounds" | "payments" | "transactions" | "audit";
+type Tab = "rounds" | "payments" | "transactions" | "bonuses" | "audit";
 const TABS: { key: Tab; label: string }[] = [
   { key: "rounds", label: "Ставки" },
   { key: "payments", label: "Платежи" },
   { key: "transactions", label: "Транзакции" },
+  { key: "bonuses", label: "Бонусы" },
   { key: "audit", label: "Аудит" },
 ];
 
@@ -24,7 +39,9 @@ type Action =
   | { kind: "withdrawals"; to: boolean }
   | { kind: "add_tag" }
   | { kind: "remove_tag"; tag: string }
-  | { kind: "adjust" };
+  | { kind: "adjust" }
+  | { kind: "grant_bonus" }
+  | { kind: "cancel_bonus"; pb: PlayerBonus };
 
 export default function PlayerPage() {
   const params = useParams<{ id: string }>();
@@ -67,7 +84,7 @@ export default function PlayerPage() {
   }
   if (!card) return <div className="muted">Загрузка…</div>;
 
-  const { player: p, balance: b, stats: s } = card;
+  const { player: p, balance: b, stats: s, vip } = card;
   const tags = p.tags || [];
 
   return (
@@ -109,6 +126,28 @@ export default function PlayerPage() {
             </span>
           )}
         </div>
+        {vip && (
+          <div className="player-meta">
+            <span className="meta-item">
+              <span className="muted">VIP</span>
+              <span className="vip-chip" title={`Уровень ${vip.level}`}>
+                ★ {card.vip_name || `Уровень ${vip.level}`} · ур. {vip.level}
+              </span>
+            </span>
+            <span className="meta-item">
+              <span className="muted">Очки</span> <b>{int(vip.points)}</b>
+            </span>
+            <span className="meta-item" title={vip.cashback_from ? `Чистый проигрыш с ${dt(vip.cashback_from)}: ${money(vip.net_loss)}` : undefined}>
+              <span className="muted">Кэшбэк доступен</span> <b>{money(vip.cashback_available)}</b>
+            </span>
+            <span className="meta-item">
+              <span className="muted">Рейкбэк доступен</span> <b>{money(vip.rakeback_available)}</b>
+            </span>
+            <span className="meta-item">
+              <span className="muted">Чистый проигрыш</span> {money(vip.net_loss)}
+            </span>
+          </div>
+        )}
         <div className="player-tags">
           <span className="muted">Теги:</span>
           {tags.length === 0 && <span className="muted">нет</span>}
@@ -196,6 +235,12 @@ export default function PlayerPage() {
             </button>
           </div>
           <div className="action-row">
+            <span>Бонус</span>
+            <button className="btn btn-sm" onClick={() => setAction({ kind: "grant_bonus" })}>
+              Выдать бонус
+            </button>
+          </div>
+          <div className="action-row">
             <span>Баланс</span>
             <button className="btn btn-sm" onClick={() => setAction({ kind: "adjust" })}>
               Корректировка
@@ -215,6 +260,14 @@ export default function PlayerPage() {
         {tab === "rounds" && <RoundsTab id={id} reloadKey={reloadKey} />}
         {tab === "payments" && <PaymentsTab id={id} reloadKey={reloadKey} />}
         {tab === "transactions" && <TransactionsTab id={id} reloadKey={reloadKey} />}
+        {tab === "bonuses" && (
+          <BonusesTab
+            id={id}
+            reloadKey={reloadKey}
+            onGrant={() => setAction({ kind: "grant_bonus" })}
+            onCancel={(pb) => setAction({ kind: "cancel_bonus", pb })}
+          />
+        )}
         {tab === "audit" && <AuditTab id={id} reloadKey={reloadKey} />}
       </div>
 
@@ -248,6 +301,16 @@ function PlayerActionModal({
   const [tag, setTag] = useState("");
   const [kind, setKind] = useState<"real" | "bonus">("real");
   const [amount, setAmount] = useState("");
+  const [bonusId, setBonusId] = useState("");
+  const [bonuses, setBonuses] = useState<BoBonus[] | null>(null);
+  const [bonusErr, setBonusErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (action.kind !== "grant_bonus") return;
+    api<{ bonuses: BoBonus[] | null }>(`/api/bo/bonuses`)
+      .then((r) => setBonuses((r.bonuses || []).filter((x) => x.active)))
+      .catch((e) => setBonusErr(errMsg(e)));
+  }, [action.kind]);
 
   const update = (body: Record<string, unknown>) =>
     api(`/api/bo/players/${encodeURIComponent(id)}/update`, { body });
@@ -352,6 +415,59 @@ function PlayerActionModal({
         if (cents === null || cents === 0) throw new Error("Некорректная сумма");
         await api(`/api/bo/players/${encodeURIComponent(id)}/adjust`, { body: { kind, amount: cents, comment } });
         onDone(`Баланс скорректирован: ${cents > 0 ? "+" : "−"}${money(Math.abs(cents))} (${kind})`);
+      };
+      break;
+    }
+    case "grant_bonus": {
+      title = "Выдать бонус";
+      confirmLabel = "Выдать";
+      const sel = bonuses?.find((x) => String(x.id) === bonusId);
+      fields = (
+        <>
+          {bonusErr && <div className="alert alert-error">{bonusErr}</div>}
+          <label className="field">
+            <span>Шаблон бонуса</span>
+            <select value={bonusId} onChange={(e) => setBonusId(e.target.value)} autoFocus>
+              <option value="">{bonuses ? "— выберите бонус —" : "Загрузка…"}</option>
+              {bonuses?.map((x) => (
+                <option key={x.id} value={x.id}>
+                  #{x.id} {x.title} — {BONUS_KIND_LABELS[x.kind] || x.kind}
+                </option>
+              ))}
+            </select>
+            {sel && (
+              <span className="field-hint">
+                {bonusTerms(sel)} · {BONUS_TRIGGER_LABELS[sel.trigger] || sel.trigger}
+                {sel.kind === "deposit_match" && " — будет ждать депозита игрока"}
+              </span>
+            )}
+            {bonuses && bonuses.length === 0 && <span className="field-hint">Нет активных бонусов</span>}
+          </label>
+        </>
+      );
+      submit = async (comment) => {
+        if (!sel) throw new Error("Выберите бонус");
+        await api(`/api/bo/players/${encodeURIComponent(id)}/bonuses`, { body: { bonus_id: sel.id, comment } });
+        onDone(`Бонус «${sel.title}» выдан`);
+      };
+      break;
+    }
+    case "cancel_bonus": {
+      const pb = action.pb;
+      title = "Отменить бонус";
+      confirmLabel = "Отменить бонус";
+      danger = true;
+      fields = (
+        <div className="modal-desc">
+          <b>{pb.title}</b> ({STATUS_LABELS_PB[pb.status] || pb.status})
+          {pb.status === "active" && (
+            <div className="small neg">Оставшийся бонусный баланс игрока будет списан.</div>
+          )}
+        </div>
+      );
+      submit = async (comment) => {
+        await api(`/api/bo/players/${encodeURIComponent(id)}/bonuses/${pb.id}/cancel`, { body: { comment } });
+        onDone(`Бонус «${pb.title}» отменён`);
       };
       break;
     }
@@ -594,6 +710,12 @@ const TX_LABELS: Record<string, string> = {
   withdraw_complete: "Вывод: выполнен",
   withdraw_reject: "Вывод: отклонён",
   adjustment: "Корректировка",
+  withdraw_release: "Вывод: возврат",
+  bonus_grant: "Бонус: начисление",
+  bonus_release: "Бонус: отыгран",
+  bonus_forfeit: "Бонус: списание",
+  cashback: "Кэшбэк",
+  rakeback: "Рейкбэк",
 };
 
 function TransactionsTab({ id, reloadKey }: { id: string; reloadKey: number }) {
@@ -652,10 +774,12 @@ function AuditTab({ id, reloadKey }: { id: string; reloadKey: number }) {
               <td className="nowrap">{dt(a.created_at)}</td>
               <td>{a.staff || "—"}</td>
               <td>
-                <span className="badge badge-muted">{a.action}</span>
+                <span className="badge badge-muted" title={a.action}>
+                  {AUDIT_ACTION_LABELS[a.action] || a.action}
+                </span>
               </td>
-              <td className="mono small">
-                <span className="muted">{shortJson(a.before)}</span> → <span>{shortJson(a.after)}</span>
+              <td>
+                <AuditDiff before={a.before} after={a.after} />
               </td>
               <td>{a.comment || <span className="muted">—</span>}</td>
             </tr>
@@ -663,5 +787,142 @@ function AuditTab({ id, reloadKey }: { id: string; reloadKey: number }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+/* ---------- bonuses ---------- */
+
+const STATUS_LABELS_PB: Record<string, string> = {
+  pending: "Ожидает депозита",
+  active: "Активен",
+  completed: "Отыгран",
+  forfeited: "Аннулирован",
+  expired: "Истёк",
+  cancelled: "Отменён",
+};
+
+const PB_TONE: Record<string, string> = {
+  pending: "warn",
+  active: "info",
+  completed: "ok",
+  forfeited: "bad",
+  expired: "muted",
+  cancelled: "muted",
+};
+
+function sourceLabel(src: string): React.ReactNode {
+  if (!src) return "—";
+  if (src.startsWith("promo:")) {
+    return (
+      <>
+        Промокод <span className="mono">{src.slice(6)}</span>
+      </>
+    );
+  }
+  return BONUS_SOURCE_LABELS[src] || src;
+}
+
+function WagerBar({ pb }: { pb: PlayerBonus }) {
+  if (!pb.wager_required) return <span className="muted">—</span>;
+  const ratio = Math.min(1, pb.wager_progress / pb.wager_required);
+  return (
+    <div style={{ minWidth: 140 }}>
+      <div className={`progress${ratio >= 1 ? " done" : ""}`}>
+        <div style={{ width: `${(ratio * 100).toFixed(1)}%` }} />
+      </div>
+      <div className="progress-label">
+        {money(pb.wager_progress)} / {money(pb.wager_required)} · {(ratio * 100).toFixed(0)}%
+      </div>
+    </div>
+  );
+}
+
+function BonusesTab({
+  id,
+  reloadKey,
+  onGrant,
+  onCancel,
+}: {
+  id: string;
+  reloadKey: number;
+  onGrant: () => void;
+  onCancel: (pb: PlayerBonus) => void;
+}) {
+  const { items, error } = useList<PlayerBonus>(`/api/bo/players/${encodeURIComponent(id)}/bonuses`, reloadKey);
+  return (
+    <>
+      <div className="toolbar">
+        <button className="btn btn-primary btn-sm" onClick={onGrant}>
+          + Выдать бонус
+        </button>
+      </div>
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Бонус</th>
+              <th>Статус</th>
+              <th>Источник</th>
+              <th className="num">Сумма</th>
+              <th>Отыгрыш</th>
+              <th>Фриспины</th>
+              <th>Выдан</th>
+              <th>Истекает</th>
+              <th>Завершён</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <ListState error={error} loading={!items && !error} empty={!!items && items.length === 0} cols={10} />
+            {items?.map((pb) => (
+              <tr key={pb.id}>
+                <td>
+                  <div className="strong">{pb.title}</div>
+                  <div className="muted small">
+                    #{pb.id} · {BONUS_KIND_LABELS[pb.kind] || pb.kind}
+                    {pb.status === "pending" && pb.min_deposit > 0 && <> · мин. депозит {money(pb.min_deposit)}</>}
+                  </div>
+                </td>
+                <td>
+                  <Badge tone={PB_TONE[pb.status] || "muted"} title={pb.status}>
+                    {STATUS_LABELS_PB[pb.status] || pb.status}
+                  </Badge>
+                </td>
+                <td title={pb.source}>{sourceLabel(pb.source)}</td>
+                <td className="num strong">{money(pb.amount)}</td>
+                <td>
+                  <WagerBar pb={pb} />
+                </td>
+                <td className="nowrap">
+                  {pb.kind === "freespins" ? (
+                    <>
+                      <div>
+                        осталось <b>{pb.freespins_left}</b>
+                      </div>
+                      <div className="muted small">
+                        выиграно {money(pb.freespins_won)}
+                        {pb.freespin_game && <> · {pb.freespin_game}</>}
+                      </div>
+                    </>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </td>
+                <td className="nowrap">{dt(pb.created_at)}</td>
+                <td className="nowrap">{dt(pb.expires_at)}</td>
+                <td className="nowrap">{dt(pb.finished_at)}</td>
+                <td>
+                  {(pb.status === "pending" || pb.status === "active") && (
+                    <button className="btn btn-danger btn-xs" onClick={() => onCancel(pb)}>
+                      Отменить
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }

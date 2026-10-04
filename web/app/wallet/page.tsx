@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api, money } from "@/lib/api";
+import { api, ApiError, money } from "@/lib/api";
+import { paymentStatusText as statusText, txText } from "@/lib/labels";
 import { balanceChanged, useMe } from "@/lib/useMe";
 
 type Method = { code: string; title: string; kind: "fiat" | "crypto"; network?: string; min_cents: number };
@@ -9,14 +10,6 @@ type Payment = { id: string; direction: string; method: string; amount: number; 
 type Tx = { id: string; type: string; amount: number; created_at: string };
 type Address = { network: string; address: string; min_cents: number; note: string };
 
-const statusText: Record<string, string> = {
-  pending: "в обработке", confirming: "подтверждается", completed: "зачислен", failed: "ошибка",
-  approved: "выплачен", rejected: "отклонён", frozen: "на проверке",
-};
-const txText: Record<string, string> = {
-  deposit: "Депозит", bet: "Ставка", win: "Выигрыш", rollback: "Отмена ставки", adjustment: "Корректировка",
-  withdraw_hold: "Вывод (резерв)", withdraw_release: "Вывод отменён", withdraw_complete: "Вывод выплачен",
-};
 const cents = (s: string) => Math.round(parseFloat(s || "0") * 100);
 const date = (s: string) => new Date(s).toLocaleString("ru-RU");
 
@@ -32,6 +25,7 @@ export default function Wallet() {
   const [txs, setTxs] = useState<Tx[]>([]);
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
+  const [bonusBlock, setBonusBlock] = useState(false);
 
   const reload = () => {
     api<{ items: Payment[] }>("/api/payments").then((r) => setPayments(r.items)).catch(() => {});
@@ -49,8 +43,11 @@ export default function Wallet() {
 
   const m = methods.find((x) => x.code === method);
   const run = async (fn: () => Promise<void>) => {
-    setError(""); setMsg("");
-    try { await fn(); } catch (e: any) { setError(e.message); }
+    setError(""); setMsg(""); setBonusBlock(false);
+    try { await fn(); } catch (e: any) {
+      if (e instanceof ApiError && e.code === "bonus_active") setBonusBlock(true);
+      else setError(e.message);
+    }
   };
 
   const deposit = () => run(async () => {
@@ -118,18 +115,21 @@ export default function Wallet() {
           )}
           {msg && <p className="ok">{msg}</p>}
           {error && <p className="error">{error}</p>}
+          {bonusBlock && (
+            <p className="error">Сначала отыграйте или отмените активный бонус. <Link href="/promo" style={{ color: "var(--accent-2)", textDecoration: "underline" }}>Перейти в «Промо»</Link></p>
+          )}
         </div>
 
         <div className="panel">
           <h2>Платежи</h2>
           {payments.length === 0 ? <p className="muted">Пока пусто</p> : (
-            <table>
+            <div className="table-wrap"><table>
               <thead><tr><th>Дата</th><th>Тип</th><th>Способ</th><th>Сумма</th><th>Статус</th></tr></thead>
               <tbody>{payments.map((p) => (
                 <tr key={p.id}><td>{date(p.created_at)}</td><td>{p.direction === "deposit" ? "Депозит" : "Вывод"}</td><td>{p.method}</td>
                   <td>{money(p.amount)}</td><td><span className={"status " + p.status}>{statusText[p.status] ?? p.status}</span></td></tr>
               ))}</tbody>
-            </table>
+            </table></div>
           )}
         </div>
       </div>
@@ -137,12 +137,12 @@ export default function Wallet() {
       <div className="panel" style={{ marginTop: 20 }}>
         <h2>История операций</h2>
         {txs.length === 0 ? <p className="muted">Пока пусто</p> : (
-          <table>
+          <div className="table-wrap"><table>
             <thead><tr><th>Дата</th><th>Операция</th><th>Сумма</th></tr></thead>
             <tbody>{txs.map((t) => (
               <tr key={t.id}><td>{date(t.created_at)}</td><td>{txText[t.type] ?? t.type}</td><td>{money(t.amount)}</td></tr>
             ))}</tbody>
-          </table>
+          </table></div>
         )}
       </div>
     </>

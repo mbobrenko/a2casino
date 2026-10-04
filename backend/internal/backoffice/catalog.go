@@ -110,7 +110,7 @@ func (s *Service) Games(w http.ResponseWriter, r *http.Request) error {
 		COALESCE(st.rounds,0) AS rounds_30d, COALESCE(st.turnover,0) AS turnover_30d, COALESCE(st.ggr,0) AS ggr_30d
 		FROM games g LEFT JOIN (SELECT game_id, count(*) rounds, sum(bet_real+bet_bonus)::BIGINT turnover,
 			sum(bet_real+bet_bonus-win_real-win_bonus)::BIGINT ggr FROM game_rounds
-			WHERE created_at > now() - interval '30 days' AND status<>'rolled_back' GROUP BY game_id) st ON st.game_id=g.id
+			WHERE created_at > now() - interval '30 days' AND status<>'rolled_back' AND provider<>'freespins' GROUP BY game_id) st ON st.game_id=g.id
 		WHERE ($1='' OR g.title ILIKE '%'||$1||'%' OR g.slug ILIKE '%'||$1||'%') AND ($2='' OR g.category=$2) AND ($3='' OR g.status=$3)
 		ORDER BY g.sort_order, g.id`, q.Get("q"), q.Get("category"), q.Get("status"))
 }

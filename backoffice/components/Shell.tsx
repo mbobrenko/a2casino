@@ -5,10 +5,21 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { clearSession, getStaff, getToken } from "@/lib/api";
 
-const NAV = [
-  { href: "/", label: "Дашборд" },
-  { href: "/players", label: "Игроки" },
-  { href: "/withdrawals", label: "Выводы" },
+const NAV: { group?: string; items: { href: string; label: string }[] }[] = [
+  { items: [{ href: "/", label: "Дашборд" }] },
+  { group: "Игроки", items: [{ href: "/players", label: "Игроки" }] },
+  { group: "Финансы", items: [{ href: "/withdrawals", label: "Выводы" }] },
+  { group: "Каталог", items: [{ href: "/games", label: "Игры" }] },
+  {
+    group: "Маркетинг",
+    items: [
+      { href: "/bonuses", label: "Бонусы" },
+      { href: "/promocodes", label: "Промокоды" },
+      { href: "/vip", label: "VIP-уровни" },
+      { href: "/banners", label: "Баннеры" },
+    ],
+  },
+  { group: "Журнал", items: [{ href: "/audit", label: "Журнал действий" }] },
 ];
 
 export default function Shell({ children }: { children: React.ReactNode }) {
@@ -46,14 +57,19 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           A2Casino <span>BO</span>
         </div>
         <nav>
-          {NAV.map((n) => {
-            const active = n.href === "/" ? pathname === "/" : pathname.startsWith(n.href);
-            return (
-              <Link key={n.href} href={n.href} className={active ? "active" : ""}>
-                {n.label}
-              </Link>
-            );
-          })}
+          {NAV.map((g, i) => (
+            <div key={g.group || i} className="nav-group">
+              {g.group && <div className="nav-group-title">{g.group}</div>}
+              {g.items.map((n) => {
+                const active = n.href === "/" ? pathname === "/" : pathname === n.href || pathname.startsWith(n.href + "/");
+                return (
+                  <Link key={n.href} href={n.href} className={active ? "active" : ""}>
+                    {n.label}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
         <div className="sidebar-foot">
           <div className="staff-email" title={staff.email || ""}>{staff.email}</div>

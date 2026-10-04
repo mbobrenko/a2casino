@@ -43,6 +43,16 @@ const messages: Record<string, string> = {
   withdrawals_blocked: "Выводы для аккаунта недоступны",
   blocked: "Аккаунт заблокирован, обратитесь в поддержку",
   rate_limited: "Слишком много попыток, попробуйте позже",
+  bonus_active: "Сначала отыграйте или отмените активный бонус",
+  promo_not_found: "Такого промокода не существует",
+  promo_expired: "Срок действия промокода истёк",
+  already_used: "Вы уже использовали этот бонус",
+  already_claimed: "Этот бонус уже ждёт вашего депозита",
+  bad_code: "Введите промокод",
+  bonus_inactive: "Этот бонус больше недоступен",
+  bonus_finished: "Этот бонус уже завершён",
+  no_freespins: "Фриспины закончились",
+  nothing_to_claim: "Минимум $1",
 };
 
 function errorText(code?: string, fallback?: string) {
@@ -53,5 +63,12 @@ export const money = (cents: number) =>
   (cents < 0 ? "-$" : "$") + (Math.abs(cents) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export type Balance = { currency: string; real: number; bonus: number; locked: number };
-export type Me = { id: string; email: string; country: string; verification: string; status: string; balance: Balance };
-export type Game = { id: number; slug: string; title: string; provider: string; category: string; rtp: number | null; is_new: boolean };
+export type Me = { id: string; email: string; country: string; verification: string; status: string; created_at: string; balance: Balance };
+export type Game = {
+  id: number; slug: string; title: string; provider: string; category: string; rtp: number | null; is_new: boolean;
+  studio: string; emoji: string; color: string; tags: string[] | null; description: string;
+};
+
+export const fmtDate = (s: string | null | undefined) => (s ? new Date(s).toLocaleDateString("ru-RU") : "—");
+export const fmtShort = (s: string) =>
+  new Date(s).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
