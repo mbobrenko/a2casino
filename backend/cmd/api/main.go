@@ -22,6 +22,7 @@ import (
 	"github.com/mbobrenko/a2casino/backend/internal/httpx"
 	"github.com/mbobrenko/a2casino/backend/internal/payments"
 	"github.com/mbobrenko/a2casino/backend/internal/player"
+	"github.com/mbobrenko/a2casino/backend/internal/promo"
 	"github.com/mbobrenko/a2casino/backend/internal/wallet"
 )
 
@@ -44,6 +45,8 @@ func main() {
 		log.Fatalf("seed admin: %v", err)
 	}
 
+	go expireBonuses(ctx, &promo.Service{Wallet: w})
+
 	srv := &http.Server{Addr: cfg.Addr, Handler: Router(cfg, w, issuer), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		log.Printf("api listening on %s", cfg.Addr)
@@ -59,11 +62,25 @@ func main() {
 	_ = srv.Shutdown(shutdown)
 }
 
+// expireBonuses closes bonuses whose time ran out, once a minute.
+func expireBonuses(ctx context.Context, s *promo.Service) {
+	t := time.NewTicker(time.Minute)
+	defer t.Stop()
+	for range t.C {
+		if n, err := s.ExpireDue(ctx); err != nil {
+			log.Printf("bonus expiry: %v", err)
+		} else if n > 0 {
+			log.Printf("bonus expiry: closed %d bonuses", n)
+		}
+	}
+}
+
 func Router(cfg config.Config, w *wallet.Wallet, issuer *auth.Issuer) http.Handler {
-	players := &player.Service{Cfg: cfg, Wallet: w, Auth: issuer}
-	gm := &games.Service{Cfg: cfg, Wallet: w, Auth: issuer}
-	pay := &payments.Service{Cfg: cfg, Wallet: w}
-	bo := &backoffice.Service{Wallet: w, Auth: issuer, Payments: pay}
+	pr := &promo.Service{Wallet: w}
+	players := &player.Service{Cfg: cfg, Wallet: w, Auth: issuer, Promo: pr}
+	gm := &games.Service{Cfg: cfg, Wallet: w, Auth: issuer, Promo: pr}
+	pay := &payments.Service{Cfg: cfg, Wallet: w, Promo: pr}
+	bo := &backoffice.Service{Wallet: w, Auth: issuer, Payments: pay, Promo: pr}
 	h := httpx.Handler
 
 	r := chi.NewRouter()
@@ -77,12 +94,25 @@ func Router(cfg config.Config, w *wallet.Wallet, issuer *auth.Issuer) http.Handl
 		r.With(limited).Post("/auth/register", h(players.Register))
 		r.With(limited).Post("/auth/login", h(players.Login))
 		r.Get("/games", h(gm.Lobby))
+		r.Get("/lobby", h(gm.LobbyHome))
+		r.Get("/promo/offers", h(pr.Offers))
+		r.Get("/vip/levels", h(pr.VipLevels))
 		r.Get("/payments/methods", h(pay.ListMethods))
 
 		r.Group(func(r chi.Router) {
 			r.Use(issuer.Require("player"))
 			r.Get("/me", h(players.Me))
 			r.Get("/wallet/transactions", h(players.Transactions))
+			r.Get("/profile", h(players.Profile))
+			r.Get("/rounds", h(gm.PlayerRounds))
+			r.Get("/bonuses", h(pr.MyBonuses))
+			r.Post("/promo/redeem", h(pr.RedeemHandler))
+			r.Post("/bonuses/offers/{id}/claim", h(pr.ClaimOfferHandler))
+			r.Post("/bonuses/{id}/cancel", h(pr.CancelHandler))
+			r.Post("/bonuses/{id}/freespin", h(pr.FreeSpinHandler))
+			r.Get("/vip", h(pr.VipHandler))
+			r.Post("/vip/claim-cashback", h(pr.ClaimCashbackHandler()))
+			r.Post("/vip/claim-rakeback", h(pr.ClaimRakebackHandler()))
 			r.Post("/games/{slug}/launch", h(gm.Launch))
 			r.Get("/originals/dice/seed", h(gm.DiceSeed))
 			r.Post("/originals/dice/seed", h(gm.DiceRotate))
@@ -106,7 +136,7 @@ func Router(cfg config.Config, w *wallet.Wallet, issuer *auth.Issuer) http.Handl
 		r.Route("/bo", func(r chi.Router) {
 			r.With(limited).Post("/login", h(bo.Login))
 			r.Group(func(r chi.Router) {
-				r.Use(issuer.Require("staff", "support", "finance"))
+				r.Use(issuer.Require("staff", "support", "finance", "marketing"))
 				r.Get("/dashboard", h(bo.Dashboard))
 				r.Get("/players", h(bo.Players))
 				r.Get("/players/{id}", h(bo.Player))
@@ -115,6 +145,29 @@ func Router(cfg config.Config, w *wallet.Wallet, issuer *auth.Issuer) http.Handl
 				r.Get("/players/{id}/transactions", h(bo.Transactions))
 				r.Get("/players/{id}/audit", h(bo.Audit))
 				r.Post("/players/{id}/update", h(bo.Update))
+				r.Get("/players/{id}/bonuses", h(bo.PlayerBonuses))
+				r.Get("/games", h(bo.Games))
+				r.Get("/providers", h(bo.Providers))
+				r.Get("/bonuses", h(bo.Bonuses))
+				r.Get("/promocodes", h(bo.PromoCodes))
+				r.Get("/vip", h(bo.VipLevels))
+				r.Get("/banners", h(bo.Banners))
+				r.Get("/audit", h(bo.AuditLog))
+			})
+			// Marketing and catalog management.
+			r.Group(func(r chi.Router) {
+				r.Use(issuer.Require("staff", "marketing"))
+				r.Post("/games/{id}", h(bo.UpdateGame))
+				r.Post("/providers/{code}", h(bo.UpdateProvider))
+				r.Post("/bonuses", h(bo.CreateBonus))
+				r.Post("/bonuses/{id}", h(bo.UpdateBonus))
+				r.Post("/promocodes", h(bo.CreatePromoCode))
+				r.Post("/promocodes/{code}", h(bo.UpdatePromoCode))
+				r.Post("/vip/{level}", h(bo.UpdateVipLevel))
+				r.Post("/banners", h(bo.CreateBanner))
+				r.Post("/banners/{id}", h(bo.UpdateBanner))
+				r.Post("/players/{id}/bonuses", h(bo.GrantBonus))
+				r.Post("/players/{id}/bonuses/{pb}/cancel", h(bo.CancelPlayerBonus))
 			})
 			r.Group(func(r chi.Router) {
 				r.Use(issuer.Require("staff", "finance"))

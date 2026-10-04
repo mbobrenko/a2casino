@@ -16,6 +16,7 @@ import (
 	"github.com/mbobrenko/a2casino/backend/internal/auth"
 	"github.com/mbobrenko/a2casino/backend/internal/config"
 	"github.com/mbobrenko/a2casino/backend/internal/httpx"
+	"github.com/mbobrenko/a2casino/backend/internal/promo"
 	"github.com/mbobrenko/a2casino/backend/internal/wallet"
 )
 
@@ -23,6 +24,7 @@ type Service struct {
 	Cfg    config.Config
 	Wallet *wallet.Wallet
 	Auth   *auth.Issuer
+	Promo  *promo.Service
 }
 
 var emailRe = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
@@ -110,7 +112,10 @@ func (s *Service) Register(w http.ResponseWriter, r *http.Request) error {
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, id, req.Email, hash, req.Country, dob, ref, ip, tags); err != nil {
 			return err
 		}
-		return wallet.CreatePlayerAccounts(r.Context(), tx, id, "USD")
+		if err := wallet.CreatePlayerAccounts(r.Context(), tx, id, "USD"); err != nil {
+			return err
+		}
+		return s.Promo.OnRegister(r.Context(), tx, id)
 	})
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -198,5 +203,51 @@ func (s *Service) Transactions(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	httpx.JSON(w, 200, map[string]any{"items": items})
+	return nil
+}
+
+// Profile is the player's account page: details, balances, VIP progress and lifetime stats.
+func (s *Service) Profile(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	id := auth.From(ctx).Subject
+	var email, country, currency, status, verification string
+	var created time.Time
+	err := s.Wallet.Pool.QueryRow(ctx, `SELECT email, country, currency, status, verification, created_at FROM players WHERE id=$1`, id).
+		Scan(&email, &country, &currency, &status, &verification, &created)
+	if err != nil {
+		return err
+	}
+	bal, err := s.Wallet.Balances(ctx, nil, id)
+	if err != nil {
+		return err
+	}
+	vip, err := s.Promo.Vip(ctx, nil, id)
+	if err != nil {
+		return err
+	}
+	var stats struct {
+		Bets, BetSum, Wins, WinSum, Deposits, DepositSum, Withdrawals, WithdrawalSum int64
+	}
+	err = s.Wallet.Pool.QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM game_rounds WHERE player_id=$1 AND bet_real+bet_bonus > 0),
+		(SELECT COALESCE(sum(bet_real+bet_bonus),0)::BIGINT FROM game_rounds WHERE player_id=$1),
+		(SELECT count(*) FROM game_rounds WHERE player_id=$1 AND win_real+win_bonus > 0),
+		(SELECT COALESCE(sum(win_real+win_bonus),0)::BIGINT FROM game_rounds WHERE player_id=$1),
+		(SELECT count(*) FROM payments WHERE player_id=$1 AND direction='deposit' AND status='completed'),
+		(SELECT COALESCE(sum(amount),0)::BIGINT FROM payments WHERE player_id=$1 AND direction='deposit' AND status='completed'),
+		(SELECT count(*) FROM payments WHERE player_id=$1 AND direction='withdrawal' AND status IN ('approved','completed')),
+		(SELECT COALESCE(sum(amount),0)::BIGINT FROM payments WHERE player_id=$1 AND direction='withdrawal' AND status IN ('approved','completed'))`, id).
+		Scan(&stats.Bets, &stats.BetSum, &stats.Wins, &stats.WinSum, &stats.Deposits, &stats.DepositSum, &stats.Withdrawals, &stats.WithdrawalSum)
+	if err != nil {
+		return err
+	}
+	httpx.JSON(w, 200, map[string]any{
+		"id": id, "email": email, "country": country, "currency": currency, "status": status,
+		"verification": verification, "created_at": created, "balance": bal, "vip": vip,
+		"stats": map[string]int64{
+			"bets": stats.Bets, "bet_sum": stats.BetSum, "wins": stats.Wins, "win_sum": stats.WinSum,
+			"deposits": stats.Deposits, "deposit_sum": stats.DepositSum, "withdrawals": stats.Withdrawals, "withdrawal_sum": stats.WithdrawalSum,
+		},
+	})
 	return nil
 }

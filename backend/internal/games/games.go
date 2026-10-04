@@ -21,6 +21,7 @@ import (
 	"github.com/mbobrenko/a2casino/backend/internal/config"
 	"github.com/mbobrenko/a2casino/backend/internal/httpx"
 	"github.com/mbobrenko/a2casino/backend/internal/player"
+	"github.com/mbobrenko/a2casino/backend/internal/promo"
 	"github.com/mbobrenko/a2casino/backend/internal/wallet"
 )
 
@@ -28,25 +29,40 @@ type Service struct {
 	Cfg    config.Config
 	Wallet *wallet.Wallet
 	Auth   *auth.Issuer
+	Promo  *promo.Service
 }
 
 type Game struct {
-	ID       int64    `json:"id"`
-	Slug     string   `json:"slug"`
-	Title    string   `json:"title"`
-	Provider string   `json:"provider"`
-	Category string   `json:"category"`
-	RTP      *float64 `json:"rtp"`
-	IsNew    bool     `json:"is_new"`
+	ID          int64    `json:"id"`
+	Slug        string   `json:"slug"`
+	Title       string   `json:"title"`
+	Provider    string   `json:"provider"`
+	Category    string   `json:"category"`
+	RTP         *float64 `json:"rtp"`
+	IsNew       bool     `json:"is_new"`
+	Studio      string   `json:"studio"`
+	Emoji       string   `json:"emoji"`
+	Color       string   `json:"color"`
+	Tags        []string `json:"tags"`
+	Description string   `json:"description"`
 }
 
+// gameCols matches the Game struct field order (alias g).
+const gameCols = `g.id, g.slug, g.title, g.provider, g.category, g.rtp::float8, g.is_new, g.studio, g.emoji, g.color, g.tags, g.description`
+
+// visibleGames is the WHERE clause for games a player in country $1 may see.
+const visibleGames = `g.status='live' AND NOT ($1 = ANY(g.blocked_countries))
+	AND NOT EXISTS (SELECT 1 FROM providers p WHERE p.code=g.studio AND (p.status<>'live' OR $1 = ANY(p.blocked_countries)))`
+
 // Lobby lists live games, hiding those blocked for the request's country.
+// Filters: category, studio, q (title search), tag.
 func (s *Service) Lobby(w http.ResponseWriter, r *http.Request) error {
-	country := player.Country(r)
-	cat := r.URL.Query().Get("category")
-	rows, err := s.Wallet.Pool.Query(r.Context(), `SELECT id, slug, title, provider, category, rtp::float8, is_new FROM games
-		WHERE status='live' AND ($1='' OR category=$1) AND NOT ($2 = ANY(blocked_countries))
-		ORDER BY sort_order, id`, cat, country)
+	q := r.URL.Query()
+	search := strings.TrimSpace(q.Get("q"))
+	rows, err := s.Wallet.Pool.Query(r.Context(), `SELECT `+gameCols+` FROM games g
+		WHERE `+visibleGames+` AND ($2='' OR g.category=$2) AND ($3='' OR g.studio=$3)
+		AND ($4='' OR g.title ILIKE '%' || $4 || '%') AND ($5='' OR $5 = ANY(g.tags))
+		ORDER BY g.sort_order, g.id`, player.Country(r), q.Get("category"), q.Get("studio"), search, q.Get("tag"))
 	if err != nil {
 		return err
 	}
@@ -65,8 +81,8 @@ func (s *Service) Launch(w http.ResponseWriter, r *http.Request) error {
 	pid := auth.From(r.Context()).Subject
 	var g Game
 	var status string
-	err := s.Wallet.Pool.QueryRow(r.Context(), `SELECT id, slug, title, provider, category, rtp::float8, is_new, status FROM games WHERE slug=$1`,
-		chi.URLParam(r, "slug")).Scan(&g.ID, &g.Slug, &g.Title, &g.Provider, &g.Category, &g.RTP, &g.IsNew, &status)
+	err := s.Wallet.Pool.QueryRow(r.Context(), `SELECT `+gameCols+`, g.status FROM games g WHERE g.slug=$1`,
+		chi.URLParam(r, "slug")).Scan(&g.ID, &g.Slug, &g.Title, &g.Provider, &g.Category, &g.RTP, &g.IsNew, &g.Studio, &g.Emoji, &g.Color, &g.Tags, &g.Description, &status)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && status != "live") {
 		return httpx.Err(404, "game_not_found", "game not found")
 	}
@@ -205,6 +221,9 @@ func (s *Service) CBBet(w http.ResponseWriter, r *http.Request) error {
 		}
 		if !res.Duplicate {
 			if _, err := tx.Exec(ctx, `UPDATE game_rounds SET bet_real=bet_real+$2, bet_bonus=bet_bonus+$3 WHERE provider='mock' AND round_id=$1`, req.RoundID, real, bonus); err != nil {
+				return err
+			}
+			if err := s.Promo.OnBet(ctx, tx, pid, real, bonus); err != nil {
 				return err
 			}
 		}

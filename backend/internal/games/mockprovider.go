@@ -6,37 +6,14 @@ package games
 
 import (
 	"bytes"
-	"crypto/rand"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
 
 	"github.com/mbobrenko/a2casino/backend/internal/httpx"
+	"github.com/mbobrenko/a2casino/backend/internal/slot"
 )
-
-// Paytable: multiplier -> probability (per 10_000). Expected return ~96.5%.
-var paytable = []struct {
-	Mult float64
-	P    int
-}{
-	{100, 4}, {20, 120}, {5, 600}, {2, 800}, {1.5, 1000}, {0.5, 1500},
-}
-
-func spinMultiplier() float64 {
-	var b [4]byte
-	_, _ = rand.Read(b[:])
-	x := int(binary.BigEndian.Uint32(b[:]) % 10000)
-	acc := 0
-	for _, row := range paytable {
-		acc += row.P
-		if x < acc {
-			return row.Mult
-		}
-	}
-	return 0
-}
 
 var gamePage = template.Must(template.New("g").Parse(`<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Mock game</title>
@@ -115,7 +92,7 @@ func (s *Service) MockSpin(w http.ResponseWriter, r *http.Request) error {
 		httpx.JSON(w, 200, map[string]any{"error": out["message"]})
 		return nil
 	}
-	mult := spinMultiplier()
+	mult := slot.Spin()
 	win := int64(float64(req.Bet) * mult)
 	out, code, err = s.callCasino("/api/provider/mock/win", map[string]any{"token": req.Token, "round_id": round, "tx_id": "w-" + round, "amount": win})
 	if err != nil {

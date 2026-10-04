@@ -37,7 +37,14 @@ func Connect(ctx context.Context, url string) (*pgxpool.Pool, error) {
 
 // Migrate applies embedded SQL migrations in file-name order, once each.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
-	if _, err := pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())`); err != nil {
+	err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(727274)`); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())`)
+		return err
+	})
+	if err != nil {
 		return err
 	}
 	entries, err := migrations.ReadDir("migrations")
@@ -62,6 +69,14 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 			return err
 		}
 		err = pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+			// Two instances starting at once (a deploy overlap, parallel tests) take turns.
+			if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(727274)`); err != nil {
+				return err
+			}
+			var done bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE name=$1)`, name).Scan(&done); err != nil || done {
+				return err
+			}
 			if _, err := tx.Exec(ctx, string(sql)); err != nil {
 				return fmt.Errorf("migration %s: %w", name, err)
 			}

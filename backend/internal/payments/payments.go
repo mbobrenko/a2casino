@@ -23,6 +23,7 @@ import (
 	"github.com/mbobrenko/a2casino/backend/internal/auth"
 	"github.com/mbobrenko/a2casino/backend/internal/config"
 	"github.com/mbobrenko/a2casino/backend/internal/httpx"
+	"github.com/mbobrenko/a2casino/backend/internal/promo"
 	"github.com/mbobrenko/a2casino/backend/internal/wallet"
 )
 
@@ -54,6 +55,7 @@ func methodBy(code string) (Method, bool) {
 type Service struct {
 	Cfg    config.Config
 	Wallet *wallet.Wallet
+	Promo  *promo.Service
 }
 
 func sign(secret string, body []byte) string {
@@ -154,6 +156,11 @@ func (s *Service) Withdraw(w http.ResponseWriter, r *http.Request) error {
 		}
 		if verification != "verified" {
 			return httpx.Err(403, "kyc_required", "verify your identity before withdrawing")
+		}
+		if active, err := s.Promo.HasActive(ctx, tx, pid); err != nil {
+			return err
+		} else if active {
+			return httpx.Err(409, "bonus_active", "finish wagering or cancel your active bonus before withdrawing")
 		}
 		_, err := s.Wallet.HoldWithdrawal(ctx, tx, pid, req.Amount, "wd:hold:"+id.String(), map[string]any{"payment_id": id, "method": m.Code})
 		if errors.Is(err, wallet.ErrInsufficientFunds) {
@@ -260,6 +267,9 @@ func (s *Service) PSPWebhook(w http.ResponseWriter, r *http.Request) error {
 		if _, err := s.Wallet.Deposit(ctx, tx, pid, amount, wallet.HousePSPClearing, "dep:"+req.PaymentID.String(), map[string]any{"payment_id": req.PaymentID, "method": "card_mock"}); err != nil {
 			return err
 		}
+		if err := s.Promo.OnDeposit(ctx, tx, pid, amount); err != nil {
+			return err
+		}
 		_, err = tx.Exec(ctx, `UPDATE payments SET status='completed', external_ref=$2, updated_at=now() WHERE id=$1`, req.PaymentID, req.PSPRef)
 		return err
 	})
@@ -326,6 +336,9 @@ func (s *Service) CryptoWebhook(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 		if _, err := s.Wallet.Deposit(ctx, tx, pid, req.AmountCents, wallet.HouseCryptoClearing, "crypto:"+req.TxHash, map[string]any{"payment_id": id, "method": method, "tx_hash": req.TxHash}); err != nil {
+			return err
+		}
+		if err := s.Promo.OnDeposit(ctx, tx, pid, req.AmountCents); err != nil {
 			return err
 		}
 		result = "completed"

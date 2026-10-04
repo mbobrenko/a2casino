@@ -31,6 +31,7 @@ const (
 	HouseCryptoClearing = "house_crypto_clearing"
 	HouseAdjustment     = "house_adjustment"
 	HouseBonusCost      = "house_bonus_cost"
+	HouseLoyalty        = "house_loyalty" // cashback and rakeback paid to players
 )
 
 var (
@@ -284,6 +285,55 @@ func (w *Wallet) Adjust(ctx context.Context, tx pgx.Tx, player uuid.UUID, kind s
 	return w.Post(ctx, tx, Posting{Key: key, Type: "adjustment", PlayerID: pid(player), Amount: abs, Meta: meta, Legs: []Leg{
 		{PlayerID: pid(player), Kind: kind, Amount: amount},
 		{Kind: house, Amount: -amount},
+	}})
+}
+
+// GrantBonus credits bonus money (deposit match, no-deposit bonus, free-spin wins).
+func (w *Wallet) GrantBonus(ctx context.Context, tx pgx.Tx, player uuid.UUID, amount int64, key string, meta map[string]any) (Result, error) {
+	if amount <= 0 {
+		return Result{}, ErrInvalidAmount
+	}
+	return w.Post(ctx, tx, Posting{Key: key, Type: "bonus_grant", PlayerID: pid(player), Amount: amount, Meta: meta, Legs: []Leg{
+		{PlayerID: pid(player), Kind: KindBonus, Amount: amount},
+		{Kind: HouseBonusCost, Amount: -amount},
+	}})
+}
+
+// ReleaseBonus turns the whole bonus balance into real money once wagering is complete.
+// It returns the amount moved (0 when the bonus balance is empty).
+func (w *Wallet) ReleaseBonus(ctx context.Context, tx pgx.Tx, player uuid.UUID, key string, meta map[string]any) (int64, error) {
+	b, err := lockedBalances(ctx, tx, player)
+	if err != nil || b.Bonus <= 0 {
+		return 0, err
+	}
+	_, err = w.Post(ctx, tx, Posting{Key: key, Type: "bonus_release", PlayerID: pid(player), Amount: b.Bonus, Meta: meta, Legs: []Leg{
+		{PlayerID: pid(player), Kind: KindBonus, Amount: -b.Bonus},
+		{PlayerID: pid(player), Kind: KindReal, Amount: b.Bonus},
+	}})
+	return b.Bonus, err
+}
+
+// ForfeitBonus removes the remaining bonus balance (bonus cancelled or expired).
+func (w *Wallet) ForfeitBonus(ctx context.Context, tx pgx.Tx, player uuid.UUID, key string, meta map[string]any) (int64, error) {
+	b, err := lockedBalances(ctx, tx, player)
+	if err != nil || b.Bonus <= 0 {
+		return 0, err
+	}
+	_, err = w.Post(ctx, tx, Posting{Key: key, Type: "bonus_forfeit", PlayerID: pid(player), Amount: b.Bonus, Meta: meta, Legs: []Leg{
+		{PlayerID: pid(player), Kind: KindBonus, Amount: -b.Bonus},
+		{Kind: HouseBonusCost, Amount: b.Bonus},
+	}})
+	return b.Bonus, err
+}
+
+// Reward pays cashback or rakeback to the real balance. typ is "cashback" or "rakeback".
+func (w *Wallet) Reward(ctx context.Context, tx pgx.Tx, player uuid.UUID, typ string, amount int64, key string, meta map[string]any) (Result, error) {
+	if amount <= 0 {
+		return Result{}, ErrInvalidAmount
+	}
+	return w.Post(ctx, tx, Posting{Key: key, Type: typ, PlayerID: pid(player), Amount: amount, Meta: meta, Legs: []Leg{
+		{PlayerID: pid(player), Kind: KindReal, Amount: amount},
+		{Kind: HouseLoyalty, Amount: -amount},
 	}})
 }
 

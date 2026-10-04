@@ -17,6 +17,7 @@ import (
 	"github.com/mbobrenko/a2casino/backend/internal/auth"
 	"github.com/mbobrenko/a2casino/backend/internal/httpx"
 	"github.com/mbobrenko/a2casino/backend/internal/payments"
+	"github.com/mbobrenko/a2casino/backend/internal/promo"
 	"github.com/mbobrenko/a2casino/backend/internal/wallet"
 )
 
@@ -24,6 +25,7 @@ type Service struct {
 	Wallet   *wallet.Wallet
 	Auth     *auth.Issuer
 	Payments *payments.Service
+	Promo    *promo.Service
 }
 
 // SeedAdmin creates the first admin account when the staff table is empty.
@@ -170,7 +172,13 @@ func (s *Service) Player(w http.ResponseWriter, r *http.Request) error {
 	}
 	st.InOut = st.DepositsSum - st.WithdrawalsSum
 	st.GGR = st.Turnover - st.TotalWin
-	httpx.JSON(w, 200, map[string]any{"player": p, "balance": bal, "stats": st})
+	vip, err := s.Promo.Vip(ctx, nil, id)
+	if err != nil {
+		return err
+	}
+	var vipName string
+	_ = s.Wallet.Pool.QueryRow(ctx, `SELECT name FROM vip_levels WHERE level=$1`, vip.Level).Scan(&vipName)
+	httpx.JSON(w, 200, map[string]any{"player": p, "balance": bal, "stats": st, "vip": vip, "vip_name": vipName})
 	return nil
 }
 

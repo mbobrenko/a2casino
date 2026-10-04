@@ -136,6 +136,9 @@ func (s *Service) DiceBet(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return err
 		}
+		if err := s.Promo.OnBet(ctx, tx, pid, real, bonus); err != nil {
+			return err
+		}
 		roll := DiceRoll(st.ServerSeed, st.ClientSeed, st.Nonce)
 		multiplier := (100 - diceEdge) / req.Target
 		win := int64(0)
