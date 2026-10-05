@@ -117,7 +117,8 @@ func TestPromoFlow(t *testing.T) {
 		t.Fatalf("withdraw with active bonus: %d %v", code, out)
 	}
 	// 2. Wagering: once the requirement is met the bonus balance becomes real money.
-	if _, err := pool.Exec(ctx, `UPDATE player_bonuses SET wager_required=100 WHERE player_id=$1 AND status='active'`, pid); err != nil {
+	// Dice counts 10%: a $1 bet adds $0.10 of wagering.
+	if _, err := pool.Exec(ctx, `UPDATE player_bonuses SET wager_required=10 WHERE player_id=$1 AND status='active'`, pid); err != nil {
 		t.Fatal(err)
 	}
 	must(200, "/api/originals/dice/bet", tok, map[string]any{"amount": 100, "target": 50})

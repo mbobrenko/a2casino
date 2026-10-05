@@ -16,13 +16,15 @@ import {
   VERIFICATIONS,
   VERIFICATION_LABELS,
   bonusTerms,
+  NETWORK_LABELS,
+  RISK_LABELS,
   dollarsToCents,
   dt,
   int,
   money,
   shortJson,
 } from "@/lib/format";
-import type { AuditEntry, BoBonus, Items, LedgerTx, Payment, PlayerBonus, PlayerCard, Round } from "@/lib/types";
+import type { AuditEntry, BoBonus, Items, LedgerTx, Payment, PayoutMethod, PlayerBonus, PlayerCard, Round } from "@/lib/types";
 
 type Tab = "rounds" | "payments" | "transactions" | "bonuses" | "audit";
 const TABS: { key: Tab; label: string }[] = [
@@ -41,7 +43,8 @@ type Action =
   | { kind: "remove_tag"; tag: string }
   | { kind: "adjust" }
   | { kind: "grant_bonus" }
-  | { kind: "cancel_bonus"; pb: PlayerBonus };
+  | { kind: "cancel_bonus"; pb: PlayerBonus }
+  | { kind: "payout" };
 
 export default function PlayerPage() {
   const params = useParams<{ id: string }>();
@@ -246,6 +249,21 @@ export default function PlayerPage() {
               Корректировка
             </button>
           </div>
+          <div className="action-row">
+            <span>Остаток</span>
+            <button
+              className="btn btn-sm"
+              disabled={p.status === "active"}
+              title={
+                p.status === "active"
+                  ? "Только для заблокированных и самоисключённых: активный игрок выводит сам из кошелька"
+                  : "Создать вывод реального баланса на адрес, указанный сотрудником"
+              }
+              onClick={() => setAction({ kind: "payout" })}
+            >
+              Выплатить остаток
+            </button>
+          </div>
         </div>
       </div>
 
@@ -304,6 +322,16 @@ function PlayerActionModal({
   const [bonusId, setBonusId] = useState("");
   const [bonuses, setBonuses] = useState<BoBonus[] | null>(null);
   const [bonusErr, setBonusErr] = useState<string | null>(null);
+  const [payoutMethods, setPayoutMethods] = useState<PayoutMethod[] | null>(null);
+  const [payoutMethod, setPayoutMethod] = useState("usdt_trc20");
+  const [payoutAddress, setPayoutAddress] = useState("");
+
+  useEffect(() => {
+    if (action.kind !== "payout") return;
+    api<{ methods: PayoutMethod[] }>(`/api/bo/payout-methods`)
+      .then((r) => setPayoutMethods(r.methods))
+      .catch((e) => setBonusErr(errMsg(e)));
+  }, [action.kind]);
 
   useEffect(() => {
     if (action.kind !== "grant_bonus") return;
@@ -449,6 +477,54 @@ function PlayerActionModal({
         if (!sel) throw new Error("Выберите бонус");
         await api(`/api/bo/players/${encodeURIComponent(id)}/bonuses`, { body: { bonus_id: sel.id, comment } });
         onDone(`Бонус «${sel.title}» выдан`);
+      };
+      break;
+    }
+    case "payout": {
+      title = "Выплатить остаток";
+      confirmLabel = "Создать вывод";
+      const real = card.balance.real;
+      const cents = amount.trim() ? dollarsToCents(amount) : 0;
+      const m = payoutMethods?.find((x) => x.code === payoutMethod);
+      fields = (
+        <>
+          <div className="modal-desc small">
+            Вывод реального баланса заблокированного или самоисключённого игрока на адрес, который он прислал. Адрес проходит
+            AML-проверку, затем вывод появится в очереди «Выводы»: одобрить → отправить криптовалюту → отметить выплаченным.
+            Реальный баланс: <b>{money(real)}</b>
+            {card.balance.bonus > 0 && <> · бонусный {money(card.balance.bonus)} не выплачивается</>}
+          </div>
+          {bonusErr && <div className="alert alert-error">{bonusErr}</div>}
+          <div className="field-row">
+            <label className="field">
+              <span>Монета и сеть</span>
+              <select value={payoutMethod} onChange={(e) => setPayoutMethod(e.target.value)}>
+                {(payoutMethods || []).map((x) => (
+                  <option key={x.code} value={x.code}>
+                    {x.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Сумма, $ (пусто — весь остаток)</span>
+              <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={(real / 100).toFixed(2)} />
+            </label>
+          </div>
+          <label className="field">
+            <span>Адрес кошелька игрока{m ? ` (${NETWORK_LABELS[m.network] || m.network})` : ""}</span>
+            <input className="mono" value={payoutAddress} onChange={(e) => setPayoutAddress(e.target.value)} spellCheck={false} autoFocus />
+          </label>
+        </>
+      );
+      submit = async (comment) => {
+        if (!payoutAddress.trim()) throw new Error("Введите адрес кошелька");
+        if (cents === null || cents < 0) throw new Error("Некорректная сумма");
+        if (cents > real) throw new Error(`Больше реального баланса (${money(real)})`);
+        const r = await api<{ amount: number; risk: string }>(`/api/bo/players/${encodeURIComponent(id)}/payout`, {
+          body: { method: payoutMethod, address: payoutAddress.trim(), amount: cents, comment },
+        });
+        onDone(`Вывод остатка ${money(r.amount)} создан и ждёт одобрения в очереди «Выводы» (риск адреса: ${RISK_LABELS[r.risk] || r.risk})`);
       };
       break;
     }
@@ -687,7 +763,13 @@ function PaymentsTab({ id, reloadKey }: { id: string; reloadKey: number }) {
                 {p.address || "—"}
               </td>
               <td className="mono small ellipsis" title={p.external_ref || ""}>
-                {p.external_ref || "—"}
+                {p.tx_url && p.external_ref ? (
+                  <a href={p.tx_url} target="_blank" rel="noopener noreferrer">
+                    {p.external_ref} ↗
+                  </a>
+                ) : (
+                  p.external_ref || "—"
+                )}
               </td>
               <td className="num">{p.crypto_amount || "—"}</td>
               <td className="mono small ellipsis" title={p.id}>

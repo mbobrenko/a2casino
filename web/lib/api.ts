@@ -53,9 +53,17 @@ const messages: Record<string, string> = {
   bonus_finished: "This bonus has already ended",
   no_freespins: "No free spins left",
   nothing_to_claim: "Minimum $1",
+  bad_address: "This address is not valid for the selected coin and network. Check it and try again",
+  address_blocked: "Withdrawals to this address are not allowed. Please contact support",
+  deposit_only: "This method is for deposits only",
 };
 
 function errorText(code?: string, fallback?: string) {
+  if (code === "max_bet_exceeded") {
+    const limit = fallback?.match(/\$[\d,.]+/)?.[0] ?? "the limit";
+    return `Max bet is ${limit} while a bonus is active. Lower your bet, or finish or cancel the bonus on the Promotions page.`;
+  }
+  if (code === "amount_too_small" && fallback) return fallback.charAt(0).toUpperCase() + fallback.slice(1);
   return (code && messages[code]) || fallback || "Request failed";
 }
 
@@ -67,6 +75,8 @@ export type Me = { id: string; email: string; country: string; verification: str
 export type Game = {
   id: number; slug: string; title: string; provider: string; category: string; rtp: number | null; is_new: boolean;
   studio: string; emoji: string; color: string; tags: string[] | null; description: string;
+  /** Percentage of each bet that counts towards bonus wagering. */
+  wagering_contribution: number;
 };
 
 export const fmtDate = (s: string | null | undefined) => (s ? new Date(s).toLocaleDateString("en-US") : "—");

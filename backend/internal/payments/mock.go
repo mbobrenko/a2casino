@@ -72,7 +72,7 @@ func (s *Service) SimulateCrypto(w http.ResponseWriter, r *http.Request) error {
 	if err := httpx.Decode(r, &req); err != nil {
 		return err
 	}
-	m, ok := s.methodBy(req.Method)
+	m, ok := s.methodBy(req.Method, "deposit")
 	if !ok || m.Kind != "crypto" {
 		return httpx.Err(400, "unknown_method", "unknown crypto method")
 	}

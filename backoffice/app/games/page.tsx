@@ -143,6 +143,7 @@ function GamesView() {
               <th>Статус</th>
               <th title="Быстро показать / скрыть">Live</th>
               <th className="num">RTP</th>
+              <th className="num" title="Какая доля ставки идёт в отыгрыш бонуса">Вклад в отыгрыш</th>
               <th className="num">Порядок</th>
               <th>Новинка</th>
               <th>Блок. страны</th>
@@ -183,6 +184,7 @@ function GamesView() {
                   />
                 </td>
                 <td className="num">{g.rtp}%</td>
+                <td className={`num${g.wagering_contribution < 100 ? " warn" : ""}`}>{g.wagering_contribution}%</td>
                 <td className="num">{g.sort_order}</td>
                 <td>{g.is_new ? <Badge tone="info">Новинка</Badge> : <span className="muted">—</span>}</td>
                 <td>
@@ -203,14 +205,14 @@ function GamesView() {
             ))}
             {rows && rows.length === 0 && (
               <tr>
-                <td colSpan={15} className="empty">
+                <td colSpan={16} className="empty">
                   Ничего не найдено
                 </td>
               </tr>
             )}
             {!rows && !error && (
               <tr>
-                <td colSpan={15} className="empty">
+                <td colSpan={16} className="empty">
                   Загрузка…
                 </td>
               </tr>
@@ -253,6 +255,7 @@ function GameEditModal({ game, onClose, onDone }: { game: BoGame; onClose: () =>
   const [tags, setTags] = useState((game.tags || []).join(", "));
   const [emoji, setEmoji] = useState(game.emoji);
   const [color, setColor] = useState(game.color || "#3d5afe");
+  const [contribution, setContribution] = useState(String(game.wagering_contribution ?? 100));
 
   const badCodes = invalidCodes(parseCodes(blocked));
 
@@ -284,6 +287,9 @@ function GameEditModal({ game, onClose, onDone }: { game: BoGame; onClose: () =>
         if (t.join(",") !== (game.tags || []).join(",")) body.tags = t;
         if (emoji !== game.emoji) body.emoji = emoji;
         if (color !== game.color) body.color = color;
+        const wc = Number(contribution);
+        if (contribution.trim() === "" || !Number.isInteger(wc) || wc < 0 || wc > 100) throw new Error("Вклад в отыгрыш — целое число от 0 до 100");
+        if (wc !== game.wagering_contribution) body.wagering_contribution = wc;
         if (Object.keys(body).length === 0) throw new Error("Нет изменений");
         await api(`/api/bo/games/${game.id}`, { body: { ...body, comment } });
         onDone(`Игра «${title.trim()}» сохранена`);
@@ -321,6 +327,11 @@ function GameEditModal({ game, onClose, onDone }: { game: BoGame; onClose: () =>
           <input type="number" step={1} value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} />
         </label>
       </div>
+      <label className="field">
+        <span>Вклад в отыгрыш бонуса, %</span>
+        <input type="number" min={0} max={100} step={1} value={contribution} onChange={(e) => setContribution(e.target.value)} />
+        <span className="field-hint">100 — ставка идёт в вейджер полностью, 10 — на 10% (как Dice), 0 — не идёт в отыгрыш</span>
+      </label>
       <label className="check">
         <input type="checkbox" checked={isNew} onChange={(e) => setIsNew(e.target.checked)} /> Новинка
       </label>

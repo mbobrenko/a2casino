@@ -159,7 +159,7 @@ func (s *Service) Player(w http.ResponseWriter, r *http.Request) error {
 		COALESCE(sum(amount) FILTER (WHERE direction='deposit' AND status='completed'),0),
 		count(*) FILTER (WHERE direction='withdrawal' AND status='completed'),
 		COALESCE(sum(amount) FILTER (WHERE direction='withdrawal' AND status='completed'),0),
-		COALESCE(sum(amount) FILTER (WHERE direction='withdrawal' AND status='pending'),0),
+		COALESCE(sum(amount) FILTER (WHERE direction='withdrawal' AND status IN ('pending','approved')),0),
 		min(created_at) FILTER (WHERE direction='deposit' AND status='completed')
 		FROM payments WHERE player_id=$1`, id).Scan(&st.DepositsCount, &st.DepositsSum, &st.WithdrawalsCount, &st.WithdrawalsSum, &st.PendingWithdraw, &st.FirstDepositAt)
 	if err != nil {
@@ -416,14 +416,16 @@ func (s *Service) Withdrawals(w http.ResponseWriter, r *http.Request) error {
 		status = "pending"
 	}
 	rows, err := s.Wallet.Pool.Query(r.Context(), `
-		SELECT p.id, p.player_id, pl.email, pl.verification, pl.tags, p.method, p.amount, p.status, p.address, p.risk, p.risk_reasons, p.created_at,
+		SELECT p.id, p.player_id, pl.email, pl.status, pl.verification, pl.tags, p.method, p.amount, p.status, p.address, p.risk, p.risk_reasons, p.created_at,
+		  p.network, p.external_ref, p.crypto_amount, p.approved_at, p.paid_at,
+		  (SELECT email FROM staff WHERE id=p.approved_by), (SELECT email FROM staff WHERE id=p.paid_by), (SELECT email FROM staff WHERE id=p.created_by), p.provider,
 		  (SELECT min(created_at) FROM payments d WHERE d.player_id=p.player_id AND d.direction='deposit' AND d.status='completed'),
 		  (SELECT count(*) FROM payments d WHERE d.player_id=p.player_id AND d.direction='deposit' AND d.status='completed'),
 		  (SELECT COALESCE(sum(amount),0) FROM payments d WHERE d.player_id=p.player_id AND d.direction='deposit' AND d.status='completed'),
 		  (SELECT count(*) FROM payments d WHERE d.player_id=p.player_id AND d.direction='withdrawal' AND d.status='completed'),
 		  (SELECT COALESCE(sum(bet_real+bet_bonus),0) FROM game_rounds g WHERE g.player_id=p.player_id AND g.status<>'rolled_back')
 		FROM payments p JOIN players pl ON pl.id=p.player_id
-		WHERE p.direction='withdrawal' AND p.status=$1 ORDER BY p.created_at LIMIT 200`, status)
+		WHERE p.direction='withdrawal' AND p.status=$1 ORDER BY CASE WHEN p.status IN ('pending','approved') THEN p.created_at END, p.created_at DESC LIMIT 200`, status)
 	if err != nil {
 		return err
 	}
@@ -431,6 +433,7 @@ func (s *Service) Withdrawals(w http.ResponseWriter, r *http.Request) error {
 		ID             uuid.UUID  `json:"id"`
 		PlayerID       uuid.UUID  `json:"player_id"`
 		Email          string     `json:"email"`
+		PlayerStatus   string     `json:"player_status"`
 		Verification   string     `json:"verification"`
 		Tags           []string   `json:"tags"`
 		Method         string     `json:"method"`
@@ -440,6 +443,16 @@ func (s *Service) Withdrawals(w http.ResponseWriter, r *http.Request) error {
 		Risk           *string    `json:"risk"`
 		RiskReasons    []string   `json:"risk_reasons"`
 		CreatedAt      time.Time  `json:"created_at"`
+		Network        *string    `json:"network"`
+		TxHash         *string    `json:"tx_hash"`
+		CryptoAmount   *string    `json:"crypto_amount"`
+		ApprovedAt     *time.Time `json:"approved_at"`
+		PaidAt         *time.Time `json:"paid_at"`
+		ApprovedBy     *string    `json:"approved_by"`
+		PaidBy         *string    `json:"paid_by"`
+		CreatedBy      *string    `json:"created_by"` // staff who created a balance payout
+		TxURL          string     `json:"tx_url,omitempty"`
+		Manual         bool       `json:"manual"` // paid by hand: approve, then mark paid with the tx hash
 		FirstDeposit   *time.Time `json:"first_deposit_at"`
 		Deposits       int64      `json:"deposits_count"`
 		DepositsSum    int64      `json:"deposits_sum"`
@@ -449,8 +462,14 @@ func (s *Service) Withdrawals(w http.ResponseWriter, r *http.Request) error {
 	}
 	list, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (item, error) {
 		var it item
-		err := row.Scan(&it.ID, &it.PlayerID, &it.Email, &it.Verification, &it.Tags, &it.Method, &it.Amount, &it.Status, &it.Address, &it.Risk, &it.RiskReasons, &it.CreatedAt,
+		var provider string
+		err := row.Scan(&it.ID, &it.PlayerID, &it.Email, &it.PlayerStatus, &it.Verification, &it.Tags, &it.Method, &it.Amount, &it.Status, &it.Address, &it.Risk, &it.RiskReasons, &it.CreatedAt,
+			&it.Network, &it.TxHash, &it.CryptoAmount, &it.ApprovedAt, &it.PaidAt, &it.ApprovedBy, &it.PaidBy, &it.CreatedBy, &provider,
 			&it.FirstDeposit, &it.Deposits, &it.DepositsSum, &it.Withdrawals, &it.Turnover)
+		it.Manual = provider == "manual"
+		if it.Network != nil && it.TxHash != nil && it.Status == "completed" {
+			it.TxURL = payments.ExplorerURL(*it.Network, *it.TxHash)
+		}
 		if it.FirstDeposit != nil {
 			h := it.CreatedAt.Sub(*it.FirstDeposit).Hours()
 			it.PaymentSpeedHr = &h
@@ -502,6 +521,7 @@ func (s *Service) Dashboard(w http.ResponseWriter, r *http.Request) error {
 		DepositsToday    int64 `json:"deposits_today"`
 		WithdrawalsToday int64 `json:"withdrawals_today"`
 		PendingWithdraw  int64 `json:"pending_withdrawals"`
+		AwaitingPayout   int64 `json:"awaiting_payout"` // approved manual payouts not marked paid yet
 		TurnoverToday    int64 `json:"turnover_today"`
 		GGRToday         int64 `json:"ggr_today"`
 	}
@@ -512,9 +532,10 @@ func (s *Service) Dashboard(w http.ResponseWriter, r *http.Request) error {
 		(SELECT COALESCE(sum(amount),0) FROM payments WHERE direction='deposit' AND status='completed' AND updated_at >= date_trunc('day', now())),
 		(SELECT COALESCE(sum(amount),0) FROM payments WHERE direction='withdrawal' AND status='completed' AND updated_at >= date_trunc('day', now())),
 		(SELECT count(*) FROM payments WHERE direction='withdrawal' AND status='pending'),
+		(SELECT count(*) FROM payments WHERE direction='withdrawal' AND status='approved'),
 		(SELECT COALESCE(sum(bet_real+bet_bonus),0) FROM game_rounds WHERE status<>'rolled_back' AND created_at >= date_trunc('day', now())),
 		(SELECT COALESCE(sum(bet_real+bet_bonus-win_real-win_bonus),0) FROM game_rounds WHERE status<>'rolled_back' AND created_at >= date_trunc('day', now()))`).
-		Scan(&d.Players, &d.NewToday, &d.DepositsToday, &d.WithdrawalsToday, &d.PendingWithdraw, &d.TurnoverToday, &d.GGRToday)
+		Scan(&d.Players, &d.NewToday, &d.DepositsToday, &d.WithdrawalsToday, &d.PendingWithdraw, &d.AwaitingPayout, &d.TurnoverToday, &d.GGRToday)
 	if err != nil {
 		return err
 	}

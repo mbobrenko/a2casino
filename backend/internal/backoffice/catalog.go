@@ -106,7 +106,7 @@ func ok(w http.ResponseWriter) { httpx.JSON(w, 200, map[string]any{"ok": true}) 
 func (s *Service) Games(w http.ResponseWriter, r *http.Request) error {
 	q := r.URL.Query()
 	return s.list(w, r, "games", `SELECT g.id, g.slug, g.title, g.provider, g.studio, g.category, g.status, g.rtp::float8 AS rtp,
-		g.sort_order, g.is_new, g.blocked_countries, g.tags, g.emoji, g.color,
+		g.sort_order, g.is_new, g.blocked_countries, g.tags, g.emoji, g.color, g.wagering_contribution,
 		COALESCE(st.rounds,0) AS rounds_30d, COALESCE(st.turnover,0) AS turnover_30d, COALESCE(st.ggr,0) AS ggr_30d
 		FROM games g LEFT JOIN (SELECT game_id, count(*) rounds, sum(bet_real+bet_bonus)::BIGINT turnover,
 			sum(bet_real+bet_bonus-win_real-win_bonus)::BIGINT ggr FROM game_rounds
@@ -133,12 +133,19 @@ func (s *Service) UpdateGame(w http.ResponseWriter, r *http.Request) error {
 		Tags             *[]string `json:"tags"`
 		Emoji            *string   `json:"emoji"`
 		Color            *string   `json:"color"`
+		Contribution     *int      `json:"wagering_contribution"`
 		Comment          string    `json:"comment"`
 	}
 	if err := httpx.Decode(r, &req); err != nil {
 		return err
 	}
 	p := newPatch(id)
+	if req.Contribution != nil {
+		if *req.Contribution < 0 || *req.Contribution > 100 {
+			return httpx.Err(400, "bad_wagering_contribution", "wagering contribution must be 0–100%")
+		}
+		p.add("wagering_contribution", *req.Contribution)
+	}
 	if req.Title != nil && strings.TrimSpace(*req.Title) != "" {
 		p.add("title", strings.TrimSpace(*req.Title))
 	}
@@ -236,7 +243,7 @@ func (s *Service) UpdateProvider(w http.ResponseWriter, r *http.Request) error {
 
 func (s *Service) Bonuses(w http.ResponseWriter, r *http.Request) error {
 	return s.list(w, r, "bonuses", `SELECT b.id, b.title, b.description, b.kind, b.trigger, b.percent, b.max_amount, b.fixed_amount,
-		b.min_deposit, b.wager_multiplier, b.freespins_count, b.freespin_value, b.freespin_game, b.valid_days, b.active,
+		b.min_deposit, b.wager_multiplier, b.freespins_count, b.freespin_value, b.freespin_game, b.valid_days, b.active, b.max_bet,
 		count(pb.id) AS given,
 		count(pb.id) FILTER (WHERE pb.status='active') AS active_count,
 		count(pb.id) FILTER (WHERE pb.status='completed') AS completed,
@@ -259,6 +266,7 @@ type bonusReq struct {
 	FreespinGame    *string `json:"freespin_game"`
 	ValidDays       *int    `json:"valid_days"`
 	Active          *bool   `json:"active"`
+	MaxBet          *int64  `json:"max_bet"`
 	Comment         string  `json:"comment"`
 }
 
@@ -300,6 +308,7 @@ func (b bonusReq) fill(p *patch) error {
 		{"freespins_count", b.FreespinsCount, b.FreespinsCount != nil && *b.FreespinsCount < 0},
 		{"freespin_value", b.FreespinValue, b.FreespinValue != nil && *b.FreespinValue < 0},
 		{"valid_days", b.ValidDays, b.ValidDays != nil && *b.ValidDays < 1},
+		{"max_bet", b.MaxBet, b.MaxBet != nil && *b.MaxBet < 0},
 	} {
 		if f.neg {
 			return httpx.Err(400, "bad_"+f.col, f.col+" is out of range")

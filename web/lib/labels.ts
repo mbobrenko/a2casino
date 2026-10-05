@@ -9,8 +9,22 @@ export const txText: Record<string, string> = {
 
 export const paymentStatusText: Record<string, string> = {
   pending: "Processing", confirming: "Confirming", partially_paid: "Partially paid", completed: "Credited", failed: "Failed",
-  approved: "Paid out", rejected: "Rejected", frozen: "Under review",
+  approved: "Approved · awaiting payout", rejected: "Rejected", frozen: "Under review",
 };
+
+/** Status of a payment for the player: a completed withdrawal reads "Paid", a completed deposit "Credited". */
+export const paymentStatus = (p: { direction: string; status: string }) =>
+  p.direction === "withdrawal" && p.status === "completed" ? "Paid" : paymentStatusText[p.status] ?? p.status;
+
+/** A payment as returned by /api/payments. */
+export type Payment = {
+  id: string; direction: string; method: string; amount: number; status: string; address: string | null;
+  external_ref: string | null; crypto_amount: string | null; network: string | null; paid_at: string | null;
+  created_at: string; tx_url?: string;
+};
+
+/** Shortened transaction hash for tables: 0x12ab…89ef. */
+export const shortHash = (h: string) => (h.length > 16 ? `${h.slice(0, 8)}…${h.slice(-6)}` : h);
 
 export const roundStatusText: Record<string, string> = {
   open: "In play", settled: "Settled", rolled_back: "Voided",
@@ -29,13 +43,15 @@ export type BonusOffer = {
   id: number; title: string; description: string; kind: "deposit_match" | "no_deposit" | "freespins"; trigger: string;
   percent: number; max_amount: number; fixed_amount: number; min_deposit: number; wager_multiplier: number;
   freespins_count: number; freespin_value: number; freespin_game: string; valid_days: number; active: boolean;
+  /** Largest bet per spin or round while the bonus is active, in cents; 0 = no limit. */
+  max_bet: number;
 };
 
 export type PlayerBonus = {
   id: number; bonus_id: number; title: string; description: string; kind: BonusOffer["kind"];
   status: "pending" | "active" | "completed" | "forfeited" | "expired" | "cancelled"; source: string;
   amount: number; wager_required: number; wager_progress: number; freespins_left: number; freespins_won: number;
-  freespin_game: string; min_deposit: number; created_at: string; expires_at: string | null; finished_at: string | null;
+  freespin_game: string; min_deposit: number; max_bet: number; created_at: string; expires_at: string | null; finished_at: string | null;
 };
 
 export type VipLevel = { level: number; name: string; min_points: number; cashback_pct: number; rakeback_pct: number; perks: string };

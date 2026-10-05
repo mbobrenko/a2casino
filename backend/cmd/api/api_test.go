@@ -73,6 +73,10 @@ func TestPlayerFlow(t *testing.T) {
 		t.Fatalf("register: %d %v", code, reg)
 	}
 	token := reg["token"].(string)
+	// No welcome bonus here: its $5 max bet and wagering rules are tested in bonusrules_test.go.
+	if _, err := pool.Exec(ctx, `UPDATE player_bonuses SET status='cancelled' WHERE player_id=$1`, reg["player_id"]); err != nil {
+		t.Fatal(err)
+	}
 
 	if code, _ := call("/api/auth/register", "", map[string]any{"email": "x" + email, "password": "secret123", "country": "MX", "birth_date": "1990-05-05"}, map[string]string{"X-Country": "BR"}); code != 403 {
 		t.Fatalf("registration from a blocked network country: %d, want 403", code)

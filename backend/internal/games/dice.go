@@ -124,6 +124,9 @@ func (s *Service) DiceBet(w http.ResponseWriter, r *http.Request) error {
 		if err := tx.QueryRow(ctx, `SELECT id FROM games WHERE slug='dice' AND status='live'`).Scan(&gid); err != nil {
 			return httpx.Err(404, "game_not_found", "dice is not available")
 		}
+		if err := s.Promo.CheckBet(ctx, tx, pid, req.Amount); err != nil {
+			return err
+		}
 		st, err := s.loadSeed(ctx, tx, pid)
 		if err != nil {
 			return err
@@ -136,7 +139,7 @@ func (s *Service) DiceBet(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return err
 		}
-		if err := s.Promo.OnBet(ctx, tx, pid, real, bonus); err != nil {
+		if err := s.Promo.OnBet(ctx, tx, pid, gid, real, bonus); err != nil {
 			return err
 		}
 		roll := DiceRoll(st.ServerSeed, st.ClientSeed, st.Nonce)

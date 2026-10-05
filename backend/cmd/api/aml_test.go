@@ -101,7 +101,7 @@ func TestAMLScreening(t *testing.T) {
 	}
 
 	// 2. Clean address passes with low risk; the same address from another player is high risk.
-	clean := "TQ" + strings.ToUpper(strings.ReplaceAll(uuid.NewString(), "-", ""))
+	clean := tronAddress()
 	tok2, _ := player()
 	if c, out := withdraw(tok2, clean); c != 201 {
 		t.Fatalf("clean address: %d %v", c, out)

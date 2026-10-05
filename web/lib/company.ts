@@ -66,6 +66,10 @@ export const RULES = {
   minAge: 18,
   currency: "USD",
   minWithdrawal: "$10.00",
+  /** Coins and networks of the manual crypto payouts (backend/internal/payments/payouts.go). */
+  payoutCoins: "USDT (TRC-20 on TRON or ERC-20 on Ethereum), USDC (ERC-20), Bitcoin (BTC), Ether (ETH) and Litecoin (LTC)",
+  /** Default maximum bet while a bonus is active; each offer can set its own. */
+  bonusMaxBet: "$5.00",
   minDiceBet: "$0.10",
   minRewardClaim: "$1.00",
   cryptoConfirmations: 3,

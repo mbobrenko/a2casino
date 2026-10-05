@@ -3,7 +3,7 @@ package payments
 // NOWPayments (https://nowpayments.io) crypto gateway: the player is sent to a hosted
 // invoice page, picks a coin and pays; NOWPayments then reports the payment status to
 // our IPN endpoint. The sandbox (api-sandbox.nowpayments.io) works the same way with
-// test coins. Deposits only; payouts are a later step.
+// test coins. Deposits only: withdrawals are paid by hand (payouts.go).
 
 import (
 	"bytes"
@@ -26,7 +26,7 @@ import (
 	"github.com/mbobrenko/a2casino/backend/internal/wallet"
 )
 
-var nowPaymentsMethod = Method{Code: "nowpayments", Title: "Crypto: USDT, BTC, ETH and more (NOWPayments)", Kind: "gateway", Provider: "nowpayments", MinCents: 1000}
+var nowPaymentsMethod = Method{Code: "nowpayments", Title: "Crypto: USDT, BTC, ETH and more (NOWPayments)", Kind: "gateway", Provider: "nowpayments", MinCents: 1000, Deposit: true}
 
 var npClient = &http.Client{Timeout: 20 * time.Second}
 

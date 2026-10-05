@@ -2,22 +2,33 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, ApiError, money } from "@/lib/api";
-import { paymentStatusText as statusText, txText } from "@/lib/labels";
+import { Payment, paymentStatus, shortHash, txText } from "@/lib/labels";
 import { balanceChanged, useMe } from "@/lib/useMe";
 
-type Method = { code: string; title: string; kind: "fiat" | "crypto" | "gateway"; network?: string; min_cents: number };
-type Payment = { id: string; direction: string; method: string; amount: number; status: string; address: string | null; created_at: string };
+type Method = {
+  code: string; title: string; kind: "fiat" | "crypto" | "gateway"; provider: string; network?: string; coin?: string;
+  min_cents: number; deposit: boolean; withdraw: boolean;
+};
 type Tx = { id: string; type: string; amount: number; created_at: string };
 type Address = { network: string; address: string; min_cents: number; note: string };
 
 const cents = (s: string) => Math.round(parseFloat(s || "0") * 100);
 const date = (s: string) => new Date(s).toLocaleString("en-US");
 
+/** What a valid payout address looks like on each network. */
+const addressHint: Record<string, string> = {
+  TRC20: "TRON address starting with T (34 characters)",
+  ERC20: "Ethereum address starting with 0x (42 characters)",
+  ETH: "Ethereum address starting with 0x (42 characters)",
+  BTC: "Bitcoin address starting with bc1, 1 or 3",
+  LTC: "Litecoin address starting with ltc1, L or M",
+};
+
 export default function Wallet() {
   const { me, ready } = useMe();
   const [methods, setMethods] = useState<Method[]>([]);
   const [tab, setTab] = useState<"deposit" | "withdraw">("deposit");
-  const [method, setMethod] = useState("card_mock");
+  const [method, setMethod] = useState("");
   const [amount, setAmount] = useState("50");
   const [address, setAddress] = useState("");
   const [crypto, setCrypto] = useState<Address | null>(null);
@@ -33,7 +44,12 @@ export default function Wallet() {
     balanceChanged();
   };
 
-  useEffect(() => { api<{ methods: Method[] }>("/api/payments/methods").then((r) => setMethods(r.methods)); }, []);
+  useEffect(() => {
+    api<{ methods: Method[] }>("/api/payments/methods").then((r) => {
+      setMethods(r.methods);
+      setMethod((cur) => cur || r.methods.find((x) => x.deposit)?.code || "");
+    });
+  }, []);
   useEffect(() => {
     if (!me) return;
     reload();
@@ -41,7 +57,13 @@ export default function Wallet() {
     if (p) setMsg({ success: "Deposit credited", processing: "Payment received. Your balance is credited once the network confirms it, usually within a few minutes.", cancelled: "Payment cancelled" }[p] ?? "Payment failed");
   }, [me?.id]);
 
-  const m = methods.find((x) => x.code === method);
+  const available = methods.filter((x) => (tab === "deposit" ? x.deposit : x.withdraw));
+  const m = available.find((x) => x.code === method);
+  const switchTab = (t: "deposit" | "withdraw") => {
+    setTab(t); setCrypto(null);
+    const list = methods.filter((x) => (t === "deposit" ? x.deposit : x.withdraw));
+    if (!list.some((x) => x.code === method)) setMethod(list[0]?.code ?? "");
+  };
   const run = async (fn: () => Promise<void>) => {
     setError(""); setMsg(""); setBonusBlock(false);
     try { await fn(); } catch (e: any) {
@@ -62,9 +84,14 @@ export default function Wallet() {
   });
   const withdraw = () => run(async () => {
     await api("/api/payments/withdraw", { method, amount: cents(amount), address });
-    setMsg("Withdrawal requested and awaiting approval");
+    setMsg(m?.kind === "crypto"
+      ? "Withdrawal requested. Once our finance team approves and sends it, the transaction hash appears in Payments."
+      : "Withdrawal requested and awaiting approval");
     reload();
   });
+
+  const methodTitle = (code: string, direction: string) =>
+    methods.find((x) => x.code === code && (direction === "deposit" ? x.deposit : x.withdraw))?.title ?? code;
 
   if (ready && !me) return <div className="panel"><h2>Log in to open your wallet</h2><Link className="btn" href="/login">Log in</Link></div>;
   if (!me) return null;
@@ -86,19 +113,27 @@ export default function Wallet() {
       <div className="cols" style={{ marginTop: 20 }}>
         <div className="panel">
           <div className="tabs">
-            <button className={"tab " + (tab === "deposit" ? "active" : "")} onClick={() => { setTab("deposit"); setCrypto(null); }}>Deposit</button>
-            <button className={"tab " + (tab === "withdraw" ? "active" : "")} onClick={() => { setTab("withdraw"); setCrypto(null); if (m?.kind === "gateway") setMethod(methods.find((x) => x.kind !== "gateway")?.code ?? ""); }}>Withdraw</button>
+            <button className={"tab " + (tab === "deposit" ? "active" : "")} onClick={() => switchTab("deposit")}>Deposit</button>
+            <button className={"tab " + (tab === "withdraw" ? "active" : "")} onClick={() => switchTab("withdraw")}>Withdraw</button>
           </div>
           <div className="form">
             <label>Method
               <select value={method} onChange={(e) => { setMethod(e.target.value); setCrypto(null); }}>
-                {methods.filter((x) => tab === "deposit" || x.kind !== "gateway").map((x) => <option key={x.code} value={x.code}>{x.title}</option>)}
+                {available.map((x) => <option key={x.code} value={x.code}>{x.title}</option>)}
               </select>
             </label>
             <label>Amount, $<input type="number" min="1" step="1" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
             {m && <p className="muted">Minimum {money(tab === "deposit" ? m.min_cents : 1000)}</p>}
             {tab === "withdraw" && m?.kind === "crypto" && (
-              <label>Wallet address ({m.network})<input value={address} onChange={(e) => setAddress(e.target.value)} /></label>
+              <>
+                <label>Your {m.coin ?? ""} wallet address ({m.network})
+                  <input value={address} onChange={(e) => setAddress(e.target.value.trim())} placeholder={addressHint[m.network ?? ""] ?? "Wallet address"} spellCheck={false} autoComplete="off" />
+                </label>
+                <p className="muted small" style={{ margin: 0 }}>
+                  We send {m.coin} on the {m.network} network only. Check the address carefully: crypto transfers cannot be reversed.
+                  Withdrawals are reviewed and sent by our finance team; the transaction hash appears in Payments once it is paid.
+                </p>
+              </>
             )}
             {tab === "deposit"
               ? <button className="btn gold" onClick={deposit}>{m?.kind === "crypto" ? "Show address" : "Proceed to payment"}</button>
@@ -129,8 +164,17 @@ export default function Wallet() {
             <div className="table-wrap"><table>
               <thead><tr><th>Date</th><th>Type</th><th>Method</th><th>Amount</th><th>Status</th></tr></thead>
               <tbody>{payments.map((p) => (
-                <tr key={p.id}><td>{date(p.created_at)}</td><td>{p.direction === "deposit" ? "Deposit" : "Withdrawal"}</td><td>{p.method}</td>
-                  <td>{money(p.amount)}</td><td><span className={"status " + p.status}>{statusText[p.status] ?? p.status}</span></td></tr>
+                <tr key={p.id}><td>{date(p.created_at)}</td><td>{p.direction === "deposit" ? "Deposit" : "Withdrawal"}</td>
+                  <td>{methodTitle(p.method, p.direction)}{p.direction === "withdrawal" && p.address && <div className="mono muted" title={p.address}>{shortHash(p.address)}</div>}</td>
+                  <td>{money(p.amount)}{p.crypto_amount && p.direction === "withdrawal" && <div className="muted small">{p.crypto_amount}</div>}</td>
+                  <td>
+                    <span className={"status " + p.status}>{paymentStatus(p)}</span>
+                    {p.tx_url && p.external_ref && (
+                      <div className="small" style={{ marginTop: 4 }}>
+                        <a className="tx-link mono" href={p.tx_url} target="_blank" rel="noopener noreferrer" title={p.external_ref}>Tx {shortHash(p.external_ref)} ↗</a>
+                      </div>
+                    )}
+                  </td></tr>
               ))}</tbody>
             </table></div>
           )}

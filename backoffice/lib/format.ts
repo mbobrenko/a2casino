@@ -52,6 +52,7 @@ export const STATUS_LABELS: Record<string, string> = {
   active: "Активен",
   blocked: "Заблокирован",
   pending: "Ожидает",
+  approved: "Одобрен, ждёт выплаты",
   completed: "Выполнен",
   rejected: "Отклонён",
   failed: "Ошибка",
@@ -97,6 +98,7 @@ export function statusTone(s: string): "ok" | "bad" | "warn" | "muted" | "info" 
     case "cancelled":
       return "bad";
     case "pending":
+    case "approved":
     case "manual_review":
     case "open":
       return "warn";
@@ -190,6 +192,8 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   balance_adjustment: "Корректировка баланса",
   withdrawal_approved: "Вывод одобрен",
   withdrawal_rejected: "Вывод отклонён",
+  withdrawal_paid: "Вывод выплачен",
+  balance_payout: "Выплата остатка",
   bonus_grant: "Выдача бонуса",
   bonus_cancel: "Отмена бонуса",
   game_update: "Игра изменена",
@@ -218,6 +222,7 @@ export function bonusTerms(b: Bonus): string {
   }
   if (b.min_deposit) parts.push(`мин. деп. ${money(b.min_deposit)}`);
   if (b.wager_multiplier) parts.push(`вейджер x${b.wager_multiplier}`);
+  parts.push(b.max_bet ? `макс. ставка ${money(b.max_bet)}` : "без лимита ставки");
   parts.push(`${b.valid_days} дн.`);
   return parts.join(" · ");
 }
@@ -238,3 +243,38 @@ export const AML_CONTEXT_LABELS: Record<string, string> = {
   deposit: "Депозит",
   manual: "Ручная проверка",
 };
+
+export const NETWORK_LABELS: Record<string, string> = {
+  TRC20: "TRON (TRC-20)",
+  ERC20: "Ethereum (ERC-20)",
+  ETH: "Ethereum",
+  BTC: "Bitcoin",
+  LTC: "Litecoin",
+};
+
+/** Block explorer page of a wallet address, to check it before paying. */
+export function explorerAddressUrl(network: string | null, address: string): string | null {
+  switch (network) {
+    case "TRC20":
+      return `https://tronscan.org/#/address/${address}`;
+    case "ERC20":
+    case "ETH":
+      return `https://etherscan.io/address/${address}`;
+    case "BTC":
+      return `https://mempool.space/address/${address}`;
+    case "LTC":
+      return `https://blockchair.com/litecoin/address/${address}`;
+    default:
+      return null;
+  }
+}
+
+/** Client-side check of a transaction hash; the API validates it again. */
+export function validTxHash(network: string | null, hash: string): boolean {
+  return /^[0-9a-fA-F]{64}$/.test(hash.trim().replace(/^0x/i, "")) && !!network;
+}
+
+/** 0x12ab…89ef */
+export function shortHash(h: string): string {
+  return h.length > 18 ? `${h.slice(0, 10)}…${h.slice(-6)}` : h;
+}

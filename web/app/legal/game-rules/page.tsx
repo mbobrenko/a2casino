@@ -66,7 +66,7 @@ export default function GameRules() {
             <p><b>Payout.</b> The payout multiplier is <code>99 / target</code>. A winning bet pays stake × multiplier, rounded down to the cent; a losing bet pays nothing. Example: $1.00 at target 50 pays x1.98, i.e. $1.98.</p>,
             <p><b>House edge and RTP.</b> Because the multiplier is 99 / target, the expected return is 99% at every target: the house edge is 1% and the RTP is 99%.</p>,
             <p><b>Stakes.</b> The minimum bet is {RULES.minDiceBet}. The maximum bet is {pending.maxDiceBet}, and is never more than your available balance.</p>,
-            <p>Bets on Dice count in full towards bonus wagering and VIP points (real-money bets) like any other game.</p>,
+            <p>While you have an active bonus, the maximum bet of the <L to="bonus-terms" /> applies (normally $5.00 per roll). Bets on Dice count only partly towards bonus wagering (see the wagering contribution table in the <L to="bonus-terms" />); real-money bets count in full towards VIP points.</p>,
           ],
         },
         {

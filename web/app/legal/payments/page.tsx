@@ -46,19 +46,22 @@ export default function Payments() {
             <p>You have <b>no active bonus</b>. Finish the wagering or cancel the bonus first; cancelling forfeits the bonus balance.</p>,
             <p>The amount is at least <b>{RULES.minWithdrawal}</b> and not more than your real balance. Bonus money cannot be withdrawn until it has been converted into real money.</p>,
             <p>Your account is active and withdrawals have not been blocked (for example during an AML review).</p>,
-            <p>For crypto, you give a valid wallet address for the selected network that belongs to you. Withdrawals to sanctioned or blacklisted addresses are refused.</p>,
+            <p>You give a wallet address that belongs to you and is valid for the selected coin and network. We check the format of the address (and its checksum where the network has one) and refuse addresses that do not match the network. Withdrawals to sanctioned or blacklisted addresses are refused.</p>,
             <p>Withdrawal limits: {pending.maxWithdrawal}.</p>,
           ],
         },
         {
           title: "Processing withdrawals",
+          lead: <p>Withdrawals are paid in cryptocurrency: {RULES.payoutCoins}. They are paid out by hand by our finance team, in these steps:</p>,
           items: [
-            <p>When you request a withdrawal, the amount is moved from your real balance to &quot;Pending withdrawal&quot; and can no longer be played.</p>,
-            <p>Every withdrawal is <b>reviewed and approved manually</b> by our finance team. We aim to complete the review within {pending.withdrawalReviewTime}. We may ask for more documents before approving.</p>,
-            <p>Crypto payout addresses are screened when you request the withdrawal and again before payment. If the address is sanctioned or blacklisted at either point, the withdrawal is not paid.</p>,
-            <p>If a withdrawal is approved, it is sent to your chosen method. If it is rejected, the amount is returned to your real balance and we tell you why where the law allows.</p>,
-            <p>Once a crypto withdrawal has been sent to the blockchain it cannot be reversed. Check the address carefully.</p>,
-            <p>Where possible, withdrawals are paid to the same method and wallet you deposited from.</p>,
+            <p><b>Request.</b> When you request a withdrawal, the amount is moved from your real balance to &quot;Pending withdrawal&quot; and can no longer be played. The status is &quot;Processing&quot;.</p>,
+            <p><b>Review.</b> Every withdrawal is <b>reviewed and approved manually</b> by our finance team. We aim to complete the review within {pending.withdrawalReviewTime}. We may ask for more documents before approving. Payout addresses are screened when you request the withdrawal and again on approval; if the address is sanctioned or blacklisted at either point, the withdrawal is not paid.</p>,
+            <p><b>Payout.</b> After approval the status is &quot;Approved · awaiting payout&quot;. Our finance team sends the coins from our exchange account or wallet to your address, on the network you selected. The amount sent is the USD amount of the withdrawal converted into the coin at the rate when it is sent.</p>,
+            <p><b>Paid.</b> Once the coins are sent, the withdrawal is marked &quot;Paid&quot; in your wallet with the <b>blockchain transaction hash</b> and a link to a public block explorer (Tronscan, Etherscan, mempool.space or Blockchair), where you can follow the confirmations. The amount then leaves your pending withdrawal balance.</p>,
+            <p>If a withdrawal is rejected, before or after approval but before it has been sent, the amount is returned to your real balance and we tell you why where the law allows.</p>,
+            <p>Once a crypto withdrawal has been sent to the blockchain it cannot be reversed. Coins sent to an address you entered incorrectly cannot be recovered. Check the address and the network carefully.</p>,
+            <p>Where possible, withdrawals are paid to the same wallet you deposited from.</p>,
+            <p>If your account is closed, blocked or self-excluded, your verified real balance is still paid out to you: contact {co.supportEmail} with a wallet address in your name. It goes through the same screening, approval and payout steps.</p>,
           ],
         },
         {
@@ -77,7 +80,7 @@ export default function Payments() {
         {
           title: "Your payment history",
           items: [
-            <p>Your wallet shows all deposits and withdrawals with their status (processing, confirming, credited, under review, rejected) and a full transaction history. If you have a question about a payment, contact {co.supportEmail} with the date, amount and, for crypto, the transaction hash.</p>,
+            <p>Your wallet shows all deposits and withdrawals with their status (processing, confirming, credited, approved · awaiting payout, paid, under review, rejected), the transaction hash of each paid crypto withdrawal and a full transaction history. If you have a question about a payment, contact {co.supportEmail} with the date, amount and, for crypto, the transaction hash.</p>,
           ],
         },
       ]}

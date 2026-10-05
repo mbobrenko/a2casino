@@ -127,6 +127,10 @@ th { color: var(--muted); font-weight: 500; }
 .offer-foot { margin-top: auto; }
 .bonus p { margin: 0 0 10px; font-size: 14px; }
 .bonus.past { opacity: .7; }
+.bonus .bonus-rule, .rule-note { font-size: 13px; line-height: 1.45; color: var(--text); background: rgba(255,181,71,.08); border: 1px solid rgba(255,181,71,.35); border-radius: 8px; padding: 8px 12px; margin: 12px 0 0; }
+.bonus-rule a, .rule-note a, a.tx-link { color: var(--accent-2); text-decoration: underline; }
+.rule-note { margin: 0 0 16px; }
+.status.approved { color: #60a5fa; }
 .bonus-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .status.b-active { color: var(--good); }
 .status.b-pending { color: var(--accent-2); }

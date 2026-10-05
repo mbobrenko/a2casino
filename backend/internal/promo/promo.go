@@ -3,7 +3,9 @@
 //
 // Rules, kept deliberately simple for v0.2:
 //   - a player has at most one active bonus; deposit offers wait as "pending" until a qualifying deposit;
-//   - every bet (real or bonus money) counts toward the active bonus's wagering;
+//   - every bet (real or bonus money) counts toward the active bonus's wagering, weighted by the
+//     game's wagering_contribution (Dice 10%, other games 100% by default);
+//   - while a bonus is active, a bet above the bonus's max_bet ($5 by default) is refused;
 //   - when wagering is complete the whole bonus balance becomes real money;
 //   - cancelling, or letting an active bonus expire, forfeits the remaining bonus balance;
 //   - withdrawals are refused while a bonus is active (the player cancels it first).
@@ -45,15 +47,16 @@ type Bonus struct {
 	FreespinGame    string `json:"freespin_game"`
 	ValidDays       int    `json:"valid_days"`
 	Active          bool   `json:"active"`
+	MaxBet          int64  `json:"max_bet"` // cents per bet while this bonus is active, 0 = no limit
 }
 
 const BonusColumns = `id, title, description, kind, trigger, percent, max_amount, fixed_amount, min_deposit,
-	wager_multiplier, freespins_count, freespin_value, freespin_game, valid_days, active`
+	wager_multiplier, freespins_count, freespin_value, freespin_game, valid_days, active, max_bet`
 
 func ScanBonus(row pgx.Row) (Bonus, error) {
 	var b Bonus
 	err := row.Scan(&b.ID, &b.Title, &b.Description, &b.Kind, &b.Trigger, &b.Percent, &b.MaxAmount, &b.FixedAmount,
-		&b.MinDeposit, &b.WagerMultiplier, &b.FreespinsCount, &b.FreespinValue, &b.FreespinGame, &b.ValidDays, &b.Active)
+		&b.MinDeposit, &b.WagerMultiplier, &b.FreespinsCount, &b.FreespinValue, &b.FreespinGame, &b.ValidDays, &b.Active, &b.MaxBet)
 	return b, err
 }
 
@@ -77,6 +80,7 @@ type PlayerBonus struct {
 	FreespinsWon  int64      `json:"freespins_won"`
 	FreespinGame  string     `json:"freespin_game"`
 	MinDeposit    int64      `json:"min_deposit"`
+	MaxBet        int64      `json:"max_bet"`
 	CreatedAt     time.Time  `json:"created_at"`
 	ExpiresAt     time.Time  `json:"expires_at"`
 	FinishedAt    *time.Time `json:"finished_at"`
@@ -91,7 +95,7 @@ func (s *Service) PlayerBonuses(ctx context.Context, q querier, player uuid.UUID
 		q = s.Wallet.Pool
 	}
 	rows, err := q.Query(ctx, `SELECT pb.id, pb.bonus_id, b.title, b.description, b.kind, pb.status, pb.source, pb.amount,
-		pb.wager_required, pb.wager_progress, pb.freespins_left, pb.freespins_won, b.freespin_game, b.min_deposit,
+		pb.wager_required, pb.wager_progress, pb.freespins_left, pb.freespins_won, b.freespin_game, b.min_deposit, b.max_bet,
 		pb.created_at, pb.expires_at, pb.finished_at
 		FROM player_bonuses pb JOIN bonuses b ON b.id=pb.bonus_id
 		WHERE pb.player_id=$1 ORDER BY (pb.status IN ('active','pending')) DESC, pb.created_at DESC LIMIT $2`, player, limit)
@@ -216,8 +220,32 @@ func (s *Service) OnDeposit(ctx context.Context, tx pgx.Tx, player uuid.UUID, am
 	return err
 }
 
-// OnBet updates VIP turnover, rakeback and the active bonus's wagering after a bet.
-func (s *Service) OnBet(ctx context.Context, tx pgx.Tx, player uuid.UUID, fromReal, fromBonus int64) error {
+// CheckBet enforces the active bonus's maximum bet (per bet, spin or round). It is called
+// before the stake is taken; free spins are not bets and are not limited.
+func (s *Service) CheckBet(ctx context.Context, tx pgx.Tx, player uuid.UUID, amount int64) error {
+	var maxBet int64
+	err := tx.QueryRow(ctx, `SELECT b.max_bet FROM player_bonuses pb JOIN bonuses b ON b.id=pb.bonus_id
+		WHERE pb.player_id=$1 AND pb.status='active' AND pb.expires_at > now()`, player).Scan(&maxBet)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if maxBet > 0 && amount > maxBet {
+		return MaxBetError(maxBet)
+	}
+	return nil
+}
+
+// MaxBetError is the 400 returned for a bet above the bonus's limit.
+func MaxBetError(maxBet int64) error {
+	return httpx.Err(400, "max_bet_exceeded", fmt.Sprintf("the maximum bet while a bonus is active is $%.2f", float64(maxBet)/100))
+}
+
+// OnBet updates VIP turnover, rakeback and the active bonus's wagering after a bet on a game.
+// The bet counts towards wagering by the game's wagering_contribution percentage.
+func (s *Service) OnBet(ctx context.Context, tx pgx.Tx, player uuid.UUID, gameID, fromReal, fromBonus int64) error {
 	if fromReal > 0 {
 		var wagered int64
 		var level int
@@ -237,11 +265,16 @@ func (s *Service) OnBet(ctx context.Context, tx pgx.Tx, player uuid.UUID, fromRe
 			}
 		}
 	}
+	contribution := 100
+	if err := tx.QueryRow(ctx, `SELECT wagering_contribution FROM games WHERE id=$1`, gameID).Scan(&contribution); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	counted := (fromReal + fromBonus) * int64(contribution) / 100
 	var pbID, required, progress int64
 	var spinsLeft int
 	err := tx.QueryRow(ctx, `UPDATE player_bonuses SET wager_progress = wager_progress + $2
 		WHERE player_id=$1 AND status='active' AND expires_at > now()
-		RETURNING id, wager_required, wager_progress, freespins_left`, player, fromReal+fromBonus).Scan(&pbID, &required, &progress, &spinsLeft)
+		RETURNING id, wager_required, wager_progress, freespins_left`, player, counted).Scan(&pbID, &required, &progress, &spinsLeft)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}

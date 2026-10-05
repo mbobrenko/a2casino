@@ -1,6 +1,7 @@
 // Package payments handles deposits and withdrawals through a connector per
-// provider. This version ships two mock connectors: a fiat PSP with a hosted
-// checkout page and a crypto processor that notifies us by webhook.
+// provider: mock connectors for development (a fiat PSP with a hosted checkout page
+// and a crypto processor that notifies us by webhook), the NOWPayments gateway for
+// deposits and manual crypto payouts for withdrawals (payouts.go).
 package payments
 
 import (
@@ -34,18 +35,23 @@ type Method struct {
 	Kind     string `json:"kind"` // fiat | crypto | gateway (hosted page, deposits only)
 	Provider string `json:"provider"`
 	Network  string `json:"network,omitempty"`
+	Coin     string `json:"coin,omitempty"`
 	MinCents int64  `json:"min_cents"`
+	Deposit  bool   `json:"deposit"`  // offered on the deposit tab
+	Withdraw bool   `json:"withdraw"` // offered on the withdrawal tab
 }
 
+// Methods are the mock connectors, offered only with DEV_TOOLS. Crypto withdrawals go
+// through the manual payout methods even in development, so dev and production match.
 var Methods = []Method{
-	{Code: "card_mock", Title: "Bank card (test PSP)", Kind: "fiat", Provider: "mockpsp", MinCents: 100},
-	{Code: "usdt_trc20", Title: "USDT · TRON (TRC-20)", Kind: "crypto", Provider: "mockcrypto", Network: "TRC20", MinCents: 500},
-	{Code: "usdt_erc20", Title: "USDT · Ethereum (ERC-20)", Kind: "crypto", Provider: "mockcrypto", Network: "ERC20", MinCents: 2000},
-	{Code: "btc", Title: "Bitcoin", Kind: "crypto", Provider: "mockcrypto", Network: "BTC", MinCents: 1000},
+	{Code: "card_mock", Title: "Bank card (test PSP)", Kind: "fiat", Provider: "mockpsp", MinCents: 100, Deposit: true, Withdraw: true},
+	{Code: "usdt_trc20", Title: "USDT · TRON (TRC-20)", Kind: "crypto", Provider: "mockcrypto", Network: "TRC20", Coin: "USDT", MinCents: 500, Deposit: true},
+	{Code: "usdt_erc20", Title: "USDT · Ethereum (ERC-20)", Kind: "crypto", Provider: "mockcrypto", Network: "ERC20", Coin: "USDT", MinCents: 2000, Deposit: true},
+	{Code: "btc", Title: "Bitcoin", Kind: "crypto", Provider: "mockcrypto", Network: "BTC", Coin: "BTC", MinCents: 1000, Deposit: true},
 }
 
-// methods is the list shown to players: the mock connectors in dev, plus real
-// gateways whose keys are configured.
+// methods is the list shown to players: the mock connectors in dev, real gateways whose
+// keys are configured, and the manual crypto payouts (always available for withdrawals).
 func (s *Service) methods() []Method {
 	list := []Method{}
 	if s.Cfg.DevTools {
@@ -54,12 +60,14 @@ func (s *Service) methods() []Method {
 	if s.Cfg.NOWPaymentsAPIKey != "" {
 		list = append(list, nowPaymentsMethod)
 	}
-	return list
+	return append(list, PayoutMethods...)
 }
 
-func (s *Service) methodBy(code string) (Method, bool) {
+// methodBy finds a method for "deposit" or "withdraw" (one code can name both a mock
+// deposit connector and a manual payout method).
+func (s *Service) methodBy(code, direction string) (Method, bool) {
 	for _, m := range s.methods() {
-		if m.Code == code {
+		if m.Code == code && ((direction == "deposit" && m.Deposit) || (direction == "withdraw" && m.Withdraw)) {
 			return m, true
 		}
 	}
@@ -95,7 +103,7 @@ func (s *Service) Deposit(w http.ResponseWriter, r *http.Request) error {
 	if err := httpx.Decode(r, &req); err != nil {
 		return err
 	}
-	m, ok := s.methodBy(req.Method)
+	m, ok := s.methodBy(req.Method, "deposit")
 	if !ok {
 		return httpx.Err(400, "unknown_method", "unknown payment method")
 	}
@@ -151,40 +159,30 @@ func (s *Service) Withdraw(w http.ResponseWriter, r *http.Request) error {
 	if err := httpx.Decode(r, &req); err != nil {
 		return err
 	}
-	m, ok := s.methodBy(req.Method)
+	m, ok := s.methodBy(req.Method, "withdraw")
 	if !ok {
+		if _, dep := s.methodBy(req.Method, "deposit"); dep {
+			return httpx.Err(400, "deposit_only", "this method is for deposits only")
+		}
 		return httpx.Err(400, "unknown_method", "unknown payment method")
 	}
-	if m.Kind == "gateway" {
-		return httpx.Err(400, "deposit_only", "this method is for deposits only")
+	if req.Amount < MinWithdrawal {
+		return httpx.Err(400, "amount_too_small", fmt.Sprintf("minimum withdrawal is $%.2f", float64(MinWithdrawal)/100))
 	}
-	if req.Amount < 1000 {
-		return httpx.Err(400, "amount_too_small", "minimum withdrawal is $10.00")
-	}
-	if m.Kind == "crypto" && len(strings.TrimSpace(req.Address)) < 20 {
-		return httpx.Err(400, "bad_address", "a valid wallet address is required")
+	addr := ""
+	if m.Kind == "crypto" {
+		if addr, ok = NormalizeAddress(m.Network, req.Address); !ok {
+			return httpx.Err(400, "bad_address", "this is not a valid "+m.Title+" address")
+		}
 	}
 	ctx := r.Context()
 	id := uuid.New()
-	// Screen the payout address first, in its own transaction, so a sanctioned address
-	// leaves a trace (log, account flag) even though the request is refused.
+	// Screen the payout address first (refused with 403 address_blocked if sanctioned).
 	screen := aml.Result{}
 	if m.Kind == "crypto" {
-		err := s.Wallet.InTx(ctx, func(tx pgx.Tx) error {
-			var err error
-			if screen, err = s.AML.Screen(ctx, tx, m.Network, req.Address, "withdrawal", &pid, &id); err != nil {
-				return err
-			}
-			if screen.Risk == aml.Severe {
-				_, err = tx.Exec(ctx, `UPDATE players SET tags = array_append(array_remove(tags,'aml_review'),'aml_review'), withdrawals_blocked=true WHERE id=$1`, pid)
-			}
+		var err error
+		if screen, err = s.screen(ctx, m, pid, id, addr); err != nil {
 			return err
-		})
-		if err != nil {
-			return err
-		}
-		if screen.Risk == aml.Severe {
-			return httpx.Err(403, "address_blocked", "withdrawals to this address are not allowed; contact support")
 		}
 	}
 	err := s.Wallet.InTx(ctx, func(tx pgx.Tx) error {
@@ -204,28 +202,7 @@ func (s *Service) Withdraw(w http.ResponseWriter, r *http.Request) error {
 		} else if active {
 			return httpx.Err(409, "bonus_active", "finish wagering or cancel your active bonus before withdrawing")
 		}
-		_, err := s.Wallet.HoldWithdrawal(ctx, tx, pid, req.Amount, "wd:hold:"+id.String(), map[string]any{"payment_id": id, "method": m.Code})
-		if errors.Is(err, wallet.ErrInsufficientFunds) {
-			return httpx.Err(402, "insufficient_funds", "not enough withdrawable balance")
-		}
-		if err != nil {
-			return err
-		}
-		var addr *string
-		if m.Kind == "crypto" {
-			a := strings.TrimSpace(req.Address)
-			addr = &a
-		}
-		var risk *string
-		if screen.Risk != "" {
-			risk = &screen.Risk
-		}
-		if screen.Reasons == nil {
-			screen.Reasons = []string{}
-		}
-		_, err = tx.Exec(ctx, `INSERT INTO payments (id, player_id, direction, method, provider, amount, status, address, risk, risk_reasons) VALUES ($1,$2,'withdrawal',$3,$4,$5,'pending',$6,$7,$8)`,
-			id, pid, m.Code, m.Provider, req.Amount, addr, risk, screen.Reasons)
-		return err
+		return s.hold(ctx, tx, id, pid, m, req.Amount, addr, screen, nil)
 	})
 	if err != nil {
 		return err
@@ -235,18 +212,21 @@ func (s *Service) Withdraw(w http.ResponseWriter, r *http.Request) error {
 }
 
 type Payment struct {
-	ID           uuid.UUID `json:"id"`
-	Direction    string    `json:"direction"`
-	Method       string    `json:"method"`
-	Amount       int64     `json:"amount"`
-	Status       string    `json:"status"`
-	Address      *string   `json:"address"`
-	ExternalRef  *string   `json:"external_ref"`
-	CryptoAmount *string   `json:"crypto_amount"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID           uuid.UUID  `json:"id"`
+	Direction    string     `json:"direction"`
+	Method       string     `json:"method"`
+	Amount       int64      `json:"amount"`
+	Status       string     `json:"status"`
+	Address      *string    `json:"address"`
+	ExternalRef  *string    `json:"external_ref"`
+	CryptoAmount *string    `json:"crypto_amount"`
+	Network      *string    `json:"network"`
+	PaidAt       *time.Time `json:"paid_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	TxURL        string     `json:"tx_url,omitempty" db:"-"` // block explorer link of a paid crypto withdrawal
 }
 
-const paymentCols = `id, direction, method, amount, status, address, external_ref, crypto_amount, created_at`
+const paymentCols = `id, direction, method, amount, status, address, external_ref, crypto_amount, network, paid_at, created_at`
 
 func ListForPlayer(ctx context.Context, q interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
@@ -255,7 +235,13 @@ func ListForPlayer(ctx context.Context, q interface {
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, pgx.RowToStructByPos[Payment])
+	list, err := pgx.CollectRows(rows, pgx.RowToStructByPos[Payment])
+	for i, p := range list {
+		if p.Direction == "withdrawal" && p.Status == "completed" && p.Network != nil && p.ExternalRef != nil {
+			list[i].TxURL = ExplorerURL(*p.Network, *p.ExternalRef)
+		}
+	}
+	return list, err
 }
 
 func (s *Service) History(w http.ResponseWriter, r *http.Request) error {
@@ -403,14 +389,16 @@ func (s *Service) CryptoWebhook(w http.ResponseWriter, r *http.Request) error {
 
 // ---- Withdrawal processing (called from the back office) ----
 
-// Approve pays out a pending withdrawal through its connector (mocked: always succeeds).
+// Approve accepts a pending withdrawal. A manual crypto payout becomes "approved" and waits
+// for staff to send the coins and mark it paid (MarkPaid); the mock connectors pay out at once.
 func (s *Service) Approve(ctx context.Context, paymentID, staffID uuid.UUID) error {
 	return s.Wallet.InTx(ctx, func(tx pgx.Tx) error {
 		var pid uuid.UUID
 		var amount int64
 		var status, provider string
-		var address *string
-		err := tx.QueryRow(ctx, `SELECT player_id, amount, status, provider, address FROM payments WHERE id=$1 AND direction='withdrawal' FOR UPDATE`, paymentID).Scan(&pid, &amount, &status, &provider, &address)
+		var address, network *string
+		err := tx.QueryRow(ctx, `SELECT player_id, amount, status, provider, address, network FROM payments WHERE id=$1 AND direction='withdrawal' FOR UPDATE`, paymentID).
+			Scan(&pid, &amount, &status, &provider, &address, &network)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return httpx.Err(404, "not_found", "withdrawal not found")
 		}
@@ -422,13 +410,21 @@ func (s *Service) Approve(ctx context.Context, paymentID, staffID uuid.UUID) err
 		}
 		// Re-screen at payout time: lists change between the request and the approval.
 		if address != nil {
-			res, err := s.AML.Screen(ctx, tx, "", *address, "approval", &pid, &paymentID)
+			net := ""
+			if network != nil {
+				net = *network
+			}
+			res, err := s.AML.Screen(ctx, tx, net, *address, "approval", &pid, &paymentID)
 			if err != nil {
 				return err
 			}
 			if res.Risk == aml.Severe {
 				return httpx.Err(409, "address_blocked", "this address is sanctioned or blacklisted: reject the withdrawal")
 			}
+		}
+		if provider == "manual" {
+			_, err := tx.Exec(ctx, `UPDATE payments SET status='approved', approved_by=$2, approved_at=now(), updated_at=now() WHERE id=$1`, paymentID, staffID)
+			return err
 		}
 		clearing := wallet.HousePSPClearing
 		ref := "psp-" + paymentID.String()[:8]
@@ -440,7 +436,7 @@ func (s *Service) Approve(ctx context.Context, paymentID, staffID uuid.UUID) err
 		if _, err := s.Wallet.CompleteWithdrawal(ctx, tx, pid, amount, clearing, "wd:complete:"+paymentID.String(), map[string]any{"payment_id": paymentID}); err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `UPDATE payments SET status='completed', approved_by=$2, external_ref=$3, updated_at=now() WHERE id=$1`, paymentID, staffID, ref)
+		_, err = tx.Exec(ctx, `UPDATE payments SET status='completed', approved_by=$2, approved_at=now(), external_ref=$3, updated_at=now() WHERE id=$1`, paymentID, staffID, ref)
 		return err
 	})
 }
@@ -457,7 +453,8 @@ func (s *Service) Reject(ctx context.Context, paymentID, staffID uuid.UUID) erro
 		if err != nil {
 			return err
 		}
-		if status != "pending" {
+		// An approved manual payout can still be rejected until it is marked paid.
+		if status != "pending" && status != "approved" {
 			return httpx.Err(409, "not_pending", "withdrawal is already "+status)
 		}
 		if _, err := s.Wallet.ReleaseWithdrawal(ctx, tx, pid, amount, "wd:release:"+paymentID.String(), map[string]any{"payment_id": paymentID}); err != nil {

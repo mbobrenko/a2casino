@@ -84,7 +84,7 @@ export default function Terms() {
           items: [
             <p key="a">Deposits are made in {RULES.currency} or in cryptocurrency converted to {RULES.currency} at the rate on arrival. Each method has a minimum deposit shown in the wallet. You may only use payment methods and wallets that belong to you.</p>,
             <p key="b">The minimum withdrawal is {RULES.minWithdrawal}. Only the real balance can be withdrawn. A withdrawal requires a verified account and is not possible while a bonus is active; you can finish the wagering or cancel the bonus first (cancelling forfeits the bonus balance).</p>,
-            <p key="c">Every withdrawal is reviewed and approved manually. The amount is set aside as a pending withdrawal while it is reviewed; if the withdrawal is rejected, it is returned to your real balance. Cryptocurrency payout addresses are screened against sanctions lists and our internal blacklist, both when you request the withdrawal and again before it is paid.</p>,
+            <p key="c">Withdrawals are paid in cryptocurrency: {RULES.payoutCoins}, to a wallet address you give for the selected network. Every withdrawal is reviewed and approved manually and then sent by our finance team; once it is sent, the blockchain transaction hash is shown in your wallet and the withdrawal cannot be reversed. The amount is set aside as a pending withdrawal until it is paid; if the withdrawal is rejected, it is returned to your real balance. Payout addresses are screened against sanctions lists and our internal blacklist, both when you request the withdrawal and again before it is paid.</p>,
             <p key="d">The casino is not a bank: balances do not earn interest, and you must not use the account for transfers, savings or any purpose other than playing.</p>,
             <p key="e">If you reverse or charge back a deposit, or a deposit is reversed by the payment provider, we may suspend the account, deduct the amount and any related costs from your balance, and void winnings obtained with those funds.</p>,
           ],
@@ -138,7 +138,7 @@ export default function Terms() {
                 <li>you behave in an abusive or threatening way towards our staff.</li>
               </ul>
             </>,
-            <p key="c">While an account is suspended you cannot log in, play or withdraw. We will explain the reason where the law allows and tell you what you can do. When an account is closed, the verified real balance is paid to you after any checks have been completed, minus amounts that are void under these Terms. Bonus balances and unclaimed rewards are forfeited when an account is closed.</p>,
+            <p key="c">While an account is suspended you cannot log in, play or withdraw. We will explain the reason where the law allows and tell you what you can do. When an account is closed, the verified real balance is paid to you, to a crypto wallet address you give us, after any checks have been completed, minus amounts that are void under these Terms. Bonus balances and unclaimed rewards are forfeited when an account is closed.</p>,
           ],
         },
         {

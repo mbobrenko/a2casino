@@ -72,7 +72,7 @@ export function BonusOffersTable() {
   return (
     <div className="table-wrap">
       <table className="legal-table">
-        <thead><tr><th>Offer</th><th>Type</th><th>Value</th><th>Min. deposit</th><th>Wagering</th><th>Valid</th></tr></thead>
+        <thead><tr><th>Offer</th><th>Type</th><th>Value</th><th>Min. deposit</th><th>Wagering</th><th>Max bet</th><th>Valid</th></tr></thead>
         <tbody>
           {data.map((o) => (
             <tr key={o.id}>
@@ -81,6 +81,7 @@ export function BonusOffersTable() {
               <td>{offerValue(o)}</td>
               <td className="nowrap">{o.min_deposit ? money(o.min_deposit) : "—"}</td>
               <td className="nowrap">x{o.wager_multiplier}</td>
+              <td className="nowrap">{o.max_bet ? money(o.max_bet) : "No limit"}</td>
               <td className="nowrap">{o.valid_days} {o.valid_days === 1 ? "day" : "days"}</td>
             </tr>
           ))}
@@ -112,21 +113,66 @@ export function VipLevelsTable() {
   );
 }
 
-type Method = { code: string; title: string; kind: "fiat" | "crypto" | "gateway"; network?: string; min_cents: number };
-
-export function PaymentMethodsTable() {
-  const { data, error } = useLoad(() => api<{ methods: Method[] }>("/api/payments/methods").then((r) => r.methods));
+/** How much of each bet counts towards bonus wagering, grouped by percentage (lowest first). */
+export function WageringContributionTable() {
+  const { data, error } = useLoad(async () => {
+    const { games } = await api<{ games: Game[] }>("/api/games");
+    const groups = new Map<number, string[]>();
+    for (const g of games) {
+      const pct = g.wagering_contribution ?? 100;
+      groups.set(pct, [...(groups.get(pct) ?? []), g.title]);
+    }
+    return [...groups.entries()].sort((a, b) => a[0] - b[0]).map(([pct, titles]) => ({ pct, titles: titles.sort((a, b) => a.localeCompare(b)) }));
+  });
   if (!data || data.length === 0) return <State error={error} empty={!!data} />;
   return (
     <div className="table-wrap">
       <table className="legal-table">
-        <thead><tr><th>Method</th><th className="num">Min. deposit</th><th>Withdrawals</th></tr></thead>
+        <thead><tr><th className="num">Counts towards wagering</th><th>Games</th><th className="num">A $10.00 bet adds</th></tr></thead>
         <tbody>
-          {data.map((m) => (
-            <tr key={m.code}>
-              <td>{m.title}</td>
-              <td className="num nowrap">{money(m.min_cents)}</td>
-              <td>{m.kind === "gateway" ? "Deposits only" : "Yes, min. $10.00"}</td>
+          {data.map((g) => (
+            <tr key={g.pct}>
+              <td className="num nowrap"><b>{g.pct}%</b></td>
+              <td>{g.titles.join(", ")}</td>
+              <td className="num nowrap">{money(10 * g.pct)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+type Method = {
+  code: string; title: string; kind: "fiat" | "crypto" | "gateway"; provider: string; network?: string; coin?: string;
+  min_cents: number; deposit: boolean; withdraw: boolean;
+};
+
+export function PaymentMethodsTable() {
+  const { data, error } = useLoad(() => api<{ methods: Method[] }>("/api/payments/methods").then((r) => r.methods));
+  if (!data || data.length === 0) return <State error={error} empty={!!data} />;
+  // One row per method title: the same coin can be a deposit connector and a manual payout method.
+  const rows = new Map<string, { title: string; deposit?: Method; withdraw?: Method }>();
+  for (const m of data) {
+    const r = rows.get(m.title) ?? { title: m.title };
+    if (m.deposit) r.deposit = m;
+    if (m.withdraw) r.withdraw = m;
+    rows.set(m.title, r);
+  }
+  return (
+    <div className="table-wrap">
+      <table className="legal-table">
+        <thead><tr><th>Method</th><th>Deposits</th><th>Withdrawals</th></tr></thead>
+        <tbody>
+          {[...rows.values()].map((r) => (
+            <tr key={r.title}>
+              <td>{r.title}</td>
+              <td className="nowrap">{r.deposit ? `Min. ${money(r.deposit.min_cents)}` : "—"}</td>
+              <td>
+                {!r.withdraw ? "—" : r.withdraw.provider === "manual"
+                  ? `Min. ${money(Math.max(r.withdraw.min_cents, 1000))}, sent by our finance team in ${r.withdraw.coin} on ${r.withdraw.network}`
+                  : `Min. ${money(Math.max(r.withdraw.min_cents, 1000))}`}
+              </td>
             </tr>
           ))}
         </tbody>

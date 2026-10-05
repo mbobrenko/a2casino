@@ -3,7 +3,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, Balance, fmtDate, fmtShort, money } from "@/lib/api";
 import { useMe } from "@/lib/useMe";
-import { VipLevel, VipStatus, levelIcon, paymentStatusText, roundStatusText, txText } from "@/lib/labels";
+import { Payment, PlayerBonus, VipLevel, VipStatus, levelIcon, paymentStatus, roundStatusText, shortHash, txText } from "@/lib/labels";
+import BonusCard from "@/components/BonusCard";
 
 type Stats = {
   bets: number; bet_sum: number; wins: number; win_sum: number;
@@ -15,7 +16,6 @@ type Profile = {
 };
 type Round = { id: number; game: string; emoji: string; provider: string; bet: number; win: number; status: string; created_at: string };
 type Tx = { id: string; type: string; amount: number; created_at: string };
-type Payment = { id: string; direction: string; method: string; amount: number; status: string; created_at: string };
 
 const countryNames: Record<string, string> = {
   CL: "Chile", MX: "Mexico", GT: "Guatemala", HN: "Honduras", SV: "El Salvador",
@@ -36,6 +36,7 @@ export default function ProfilePage() {
   const [rounds, setRounds] = useState<Round[] | null>(null);
   const [txs, setTxs] = useState<Tx[] | null>(null);
   const [payments, setPayments] = useState<Payment[] | null>(null);
+  const [bonuses, setBonuses] = useState<PlayerBonus[]>([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -47,6 +48,7 @@ export default function ProfilePage() {
     api<{ items: Round[] }>("/api/rounds?limit=50").then((r) => setRounds(r.items)).catch(() => setRounds([]));
     api<{ items: Tx[] }>("/api/wallet/transactions?limit=100").then((r) => setTxs(r.items)).catch(() => setTxs([]));
     api<{ items: Payment[] }>("/api/payments").then((r) => setPayments(r.items)).catch(() => setPayments([]));
+    api<{ bonuses: PlayerBonus[] }>("/api/bonuses").then((r) => setBonuses(r.bonuses.filter((b) => b.status === "active" || b.status === "pending"))).catch(() => {});
   }, [me?.id, me?.balance.real, me?.balance.bonus]);
 
   if (ready && !me) return <div className="panel"><h2>Log in to view your profile</h2><Link className="btn" href="/login">Log in</Link></div>;
@@ -94,6 +96,13 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {bonuses.length > 0 && (
+        <section className="section" style={{ marginTop: 24 }}>
+          <div className="section-head"><h2>My bonuses</h2><Link href="/promo" className="muted">Manage on Promotions</Link></div>
+          <div className="cards">{bonuses.map((b) => <BonusCard key={b.id} b={b} />)}</div>
+        </section>
+      )}
 
       <h2 style={{ marginTop: 24 }}>Statistics</h2>
       <div className="tiles stats">
@@ -144,7 +153,10 @@ export default function ProfilePage() {
                 <td>{x.direction === "deposit" ? "Deposit" : "Withdrawal"}</td>
                 <td className="hide-sm">{x.method}</td>
                 <td>{money(x.amount)}</td>
-                <td><span className={"status " + x.status}>{paymentStatusText[x.status] ?? x.status}</span></td>
+                <td>
+                  <span className={"status " + x.status}>{paymentStatus(x)}</span>
+                  {x.tx_url && x.external_ref && <div className="small"><a className="tx-link mono" href={x.tx_url} target="_blank" rel="noopener noreferrer">{shortHash(x.external_ref)}</a></div>}
+                </td>
               </tr>
             ))}</tbody>
           </table></div>

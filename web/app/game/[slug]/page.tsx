@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { api, Game } from "@/lib/api";
 import { balanceChanged, useMe } from "@/lib/useMe";
 import Dice from "@/components/Dice";
+import BetRulesNotice from "@/components/BetRulesNotice";
 
 type Launch = { type: "iframe" | "originals"; url?: string; game: Game };
 
@@ -33,6 +34,7 @@ export default function GamePage() {
     <>
       <h1>{launch?.game.title ?? "Loading…"}</h1>
       {error && <p className="error">{error}</p>}
+      {launch && <BetRulesNotice game={launch.game} />}
       {launch?.type === "iframe" && <iframe className="frame" src={launch.url} title={launch.game.title} />}
       {launch?.type === "originals" && <Dice />}
     </>

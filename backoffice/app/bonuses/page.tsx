@@ -156,6 +156,7 @@ function BonusForm({ bonus, onClose, onDone }: { bonus: BoBonus | null; onClose:
   const [fsValue, setFsValue] = useState(centsToInput(b?.freespin_value));
   const [fsGame, setFsGame] = useState(b?.freespin_game || "");
   const [validDays, setValidDays] = useState(String(b?.valid_days ?? 7));
+  const [maxBet, setMaxBet] = useState(centsToInput(b ? b.max_bet : 500));
   const [games, setGames] = useState<BoGame[]>([]);
 
   useEffect(() => {
@@ -188,6 +189,7 @@ function BonusForm({ bonus, onClose, onDone }: { bonus: BoBonus | null; onClose:
       active,
       wager_multiplier: intField("Вейджер", wager),
       valid_days: intField("Срок действия", validDays, 1),
+      max_bet: moneyField("Макс. ставка", maxBet),
     };
     if (kind === "deposit_match") {
       next.percent = intField("Процент", percent);
@@ -320,6 +322,16 @@ function BonusForm({ bonus, onClose, onDone }: { bonus: BoBonus | null; onClose:
             <span>Срок действия, дней</span>
             <input type="number" min={1} step={1} value={validDays} onChange={(e) => setValidDays(e.target.value)} />
           </label>
+        </div>
+        <div className="field-row">
+          <label className="field">
+            <span>Макс. ставка при активном бонусе, $ (0 — без лимита)</span>
+            <input value={maxBet} onChange={(e) => setMaxBet(e.target.value)} placeholder="5" />
+          </label>
+          <div className="field small muted" style={{ alignSelf: "end" }}>
+            Ставки (спин, раунд, бросок кости) выше лимита отклоняются, пока бонус активен. Фриспины не ограничиваются.
+            Вклад игр в отыгрыш настраивается на странице «Игры».
+          </div>
         </div>
         <label className="check">
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Активен (доступен для выдачи)

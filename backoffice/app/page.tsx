@@ -52,6 +52,11 @@ export default function DashboardPage() {
               </div>
               <div className="tile-hint">Открыть очередь →</div>
             </Link>
+            <Link href="/withdrawals?status=approved" className="tile tile-link">
+              <div className="tile-label">Ожидают выплаты</div>
+              <div className={`tile-value${data.awaiting_payout > 0 ? " warn" : ""}`}>{data.awaiting_payout.toLocaleString("ru-RU")}</div>
+              <div className="tile-hint">Одобрены, отправить крипту →</div>
+            </Link>
           </div>
         </>
       )}

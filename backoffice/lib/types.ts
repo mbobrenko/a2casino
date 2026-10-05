@@ -6,6 +6,8 @@ export interface Dashboard {
   deposits_today: number;
   withdrawals_today: number;
   pending_withdrawals: number;
+  /** Approved manual crypto payouts not marked paid yet. */
+  awaiting_payout: number;
   turnover_today: number;
   ggr_today: number;
 }
@@ -91,7 +93,10 @@ export interface Payment {
   address: string | null;
   external_ref: string | null;
   crypto_amount: string | null;
+  network: string | null;
+  paid_at: string | null;
   created_at: string;
+  tx_url?: string;
 }
 
 export interface LedgerTx {
@@ -132,6 +137,26 @@ export interface Withdrawal {
   withdrawals_count: number;
   turnover: number;
   payment_speed_hours: number | null;
+  player_status: string;
+  network: string | null;
+  tx_hash: string | null;
+  crypto_amount: string | null;
+  approved_at: string | null;
+  paid_at: string | null;
+  approved_by: string | null;
+  paid_by: string | null;
+  created_by: string | null;
+  tx_url?: string;
+  /** Paid by hand: approve, then "mark paid" with the tx hash. */
+  manual: boolean;
+}
+
+export interface PayoutMethod {
+  code: string;
+  title: string;
+  network: string;
+  coin: string;
+  min_cents: number;
 }
 
 export interface Items<T> {
@@ -164,6 +189,8 @@ export interface BoGame {
   tags: string[] | null;
   emoji: string;
   color: string;
+  /** Percent of each bet counted towards bonus wagering, 0–100. */
+  wagering_contribution: number;
   rounds_30d: number;
   turnover_30d: number;
   ggr_30d: number;
@@ -194,6 +221,8 @@ export interface Bonus {
   freespin_game: string;
   valid_days: number;
   active: boolean;
+  /** Max bet per spin/round while the bonus is active, cents; 0 = no limit. */
+  max_bet: number;
 }
 
 export interface BoBonus extends Bonus {

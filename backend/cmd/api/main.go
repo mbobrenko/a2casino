@@ -185,6 +185,7 @@ func Router(cfg config.Config, w *wallet.Wallet, issuer *auth.Issuer) http.Handl
 				r.Get("/aml/addresses", h(bo.AMLAddresses))
 				r.Get("/aml/screenings", h(bo.AMLScreenings))
 				r.Post("/aml/check", h(bo.AMLCheck))
+				r.Get("/payout-methods", h(bo.PayoutMethods))
 			})
 			// Marketing and catalog management.
 			r.Group(func(r chi.Router) {
@@ -207,6 +208,8 @@ func Router(cfg config.Config, w *wallet.Wallet, issuer *auth.Issuer) http.Handl
 				r.Get("/withdrawals", h(bo.Withdrawals))
 				r.Post("/withdrawals/{id}/approve", h(bo.Approve()))
 				r.Post("/withdrawals/{id}/reject", h(bo.Reject()))
+				r.Post("/withdrawals/{id}/paid", h(bo.MarkPaid))
+				r.Post("/players/{id}/payout", h(bo.PlayerPayout))
 				r.Post("/aml/addresses", h(bo.AMLAddAddress))
 				r.Post("/aml/addresses/remove", h(bo.AMLRemoveAddress))
 			})

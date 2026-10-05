@@ -125,6 +125,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary-sof
 .alert { padding: 8px 12px; border-radius: var(--radius); margin-bottom: 12px; font-size: 13px; }
 .alert-error { background: var(--bad-soft); color: var(--bad); border: 1px solid #f5c2c7; }
 .alert-ok { background: var(--ok-soft); color: var(--ok); border: 1px solid #b9e3c9; cursor: pointer; }
+.alert-info { background: var(--primary-soft); color: var(--text); border: 1px solid #c5cffd; }
 
 /* ---------- tiles ---------- */
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-bottom: 14px; }

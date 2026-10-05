@@ -45,10 +45,12 @@ type Game struct {
 	Color       string   `json:"color"`
 	Tags        []string `json:"tags"`
 	Description string   `json:"description"`
+	// Percentage of each bet that counts towards bonus wagering.
+	WageringContribution int `json:"wagering_contribution"`
 }
 
 // gameCols matches the Game struct field order (alias g).
-const gameCols = `g.id, g.slug, g.title, g.provider, g.category, g.rtp::float8, g.is_new, g.studio, g.emoji, g.color, g.tags, g.description`
+const gameCols = `g.id, g.slug, g.title, g.provider, g.category, g.rtp::float8, g.is_new, g.studio, g.emoji, g.color, g.tags, g.description, g.wagering_contribution`
 
 // visibleGames is the WHERE clause for games a player in country $1 may see.
 const visibleGames = `g.status='live' AND NOT ($1 = ANY(g.blocked_countries))
@@ -82,7 +84,7 @@ func (s *Service) Launch(w http.ResponseWriter, r *http.Request) error {
 	var g Game
 	var status string
 	err := s.Wallet.Pool.QueryRow(r.Context(), `SELECT `+gameCols+`, g.status FROM games g WHERE g.slug=$1`,
-		chi.URLParam(r, "slug")).Scan(&g.ID, &g.Slug, &g.Title, &g.Provider, &g.Category, &g.RTP, &g.IsNew, &g.Studio, &g.Emoji, &g.Color, &g.Tags, &g.Description, &status)
+		chi.URLParam(r, "slug")).Scan(&g.ID, &g.Slug, &g.Title, &g.Provider, &g.Category, &g.RTP, &g.IsNew, &g.Studio, &g.Emoji, &g.Color, &g.Tags, &g.Description, &g.WageringContribution, &status)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && status != "live") {
 		return httpx.Err(404, "game_not_found", "game not found")
 	}
@@ -202,6 +204,17 @@ func (s *Service) CBBet(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return err
 		}
+		// Bonus max bet: refuse the stake with 400 max_bet_exceeded (the provider shows the message
+		// and cancels the spin). A retried bet that was already accepted is not checked again.
+		var seen bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM ledger_tx WHERE idempotency_key=$1)`, "mock:bet:"+req.TxID).Scan(&seen); err != nil {
+			return err
+		}
+		if !seen {
+			if err := s.Promo.CheckBet(ctx, tx, pid, req.Amount); err != nil {
+				return err
+			}
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO game_rounds (provider, round_id, player_id, game_id) VALUES ('mock',$1,$2,$3) ON CONFLICT DO NOTHING`, req.RoundID, pid, gid); err != nil {
 			return err
 		}
@@ -223,7 +236,7 @@ func (s *Service) CBBet(w http.ResponseWriter, r *http.Request) error {
 			if _, err := tx.Exec(ctx, `UPDATE game_rounds SET bet_real=bet_real+$2, bet_bonus=bet_bonus+$3 WHERE provider='mock' AND round_id=$1`, req.RoundID, real, bonus); err != nil {
 				return err
 			}
-			if err := s.Promo.OnBet(ctx, tx, pid, real, bonus); err != nil {
+			if err := s.Promo.OnBet(ctx, tx, pid, gid, real, bonus); err != nil {
 				return err
 			}
 		}
