@@ -36,7 +36,7 @@ type Category struct {
 	Games int    `json:"games"`
 }
 
-var categoryTitles = map[string]string{"slots": "Слоты", "crash": "Краш", "table": "Настольные", "instant": "Быстрые", "dice": "Дайс"}
+var categoryTitles = map[string]string{"slots": "Slots", "crash": "Crash", "table": "Table games", "instant": "Instant", "dice": "Dice"}
 var categoryOrder = []string{"slots", "crash", "table", "instant", "dice"}
 
 // LobbyHome is everything the lobby page shows in one request: banners, categories,
