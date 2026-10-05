@@ -5,6 +5,7 @@ import { api, Balance, fmtDate, fmtShort, money } from "@/lib/api";
 import { useMe } from "@/lib/useMe";
 import { Payment, PlayerBonus, VipLevel, VipStatus, levelIcon, paymentStatus, roundStatusText, shortHash, txText } from "@/lib/labels";
 import BonusCard from "@/components/BonusCard";
+import Verification, { verificationText } from "@/components/Verification";
 
 type Stats = {
   bets: number; bet_sum: number; wins: number; win_sum: number;
@@ -20,9 +21,6 @@ type Tx = { id: string; type: string; amount: number; created_at: string };
 const countryNames: Record<string, string> = {
   CL: "Chile", MX: "Mexico", GT: "Guatemala", HN: "Honduras", SV: "El Salvador",
   NI: "Nicaragua", BO: "Bolivia", CR: "Costa Rica", PA: "Panama", BR: "Brazil",
-};
-const verificationText: Record<string, string> = {
-  new: "Not verified", not_verified: "Not verified", manual_review: "Under review", duplicate: "Duplicate account", verified: "Verified",
 };
 const providerText: Record<string, string> = { originals: "A2 Originals", mock: "Provider", freespins: "Free spins" };
 
@@ -77,10 +75,14 @@ export default function ProfilePage() {
             <div><span className="muted">Email</span><b className="ellipsis">{p.email}</b></div>
             <div><span className="muted">Country</span><b>{countryNames[p.country] ?? p.country}</b></div>
             <div><span className="muted">Verification</span>
-              <b className={p.verification === "verified" ? "win" : ""}>{verificationText[p.verification] ?? p.verification}</b></div>
+              <b className={p.verification === "verified" ? "win" : ""}><a href="#verification">{verificationText[p.verification] ?? p.verification}</a></b></div>
             <div><span className="muted">Member since</span><b>{fmtDate(p.created_at)}</b></div>
             <div><span className="muted">VIP level</span>
               <b><Link href="/vip">{levelIcon[p.vip.level - 1] ?? "⭐"} {lvl?.name ?? p.vip.level} · {p.vip.points.toLocaleString("en-US")} points</Link></b></div>
+          </div>
+          <div className="row" style={{ marginTop: 14 }}>
+            <Link href="/responsible-gaming" className="btn ghost">🛡️ Limits &amp; breaks</Link>
+            {p.verification !== "verified" && <a href="#verification" className="btn ghost">Verify account</a>}
           </div>
         </div>
         <div className="panel">
@@ -103,6 +105,7 @@ export default function ProfilePage() {
           <div className="cards">{bonuses.map((b) => <BonusCard key={b.id} b={b} />)}</div>
         </section>
       )}
+      <div style={{ marginTop: 16 }}><Verification /></div>
 
       <h2 style={{ marginTop: 24 }}>Statistics</h2>
       <div className="tiles stats">

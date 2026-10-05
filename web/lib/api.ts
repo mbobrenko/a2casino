@@ -32,6 +32,24 @@ export async function api<T = any>(path: string, body?: unknown): Promise<T> {
   return data as T;
 }
 
+/** POSTs a multipart form (file uploads). */
+export async function upload<T = any>(path: string, form: FormData): Promise<T> {
+  const token = getToken();
+  const res = await fetch(API_URL + path, { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: form });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && token) setToken(null);
+  if (!res.ok) throw new ApiError(res.status, data.code || "error", errorText(data.code, data.message));
+  return data as T;
+}
+
+/** GETs a private file (it needs the auth header, so it cannot be a plain link) as an object URL. */
+export async function fileURL(path: string): Promise<string> {
+  const token = getToken();
+  const res = await fetch(API_URL + path, { headers: token ? { Authorization: `Bearer ${token}` } : {}, cache: "no-store" });
+  if (!res.ok) throw new ApiError(res.status, "error", "Could not load the file");
+  return URL.createObjectURL(await res.blob());
+}
+
 const messages: Record<string, string> = {
   country_blocked: "Registration is not available in your country",
   underage: "You must be 18 or older to play",
@@ -56,6 +74,16 @@ const messages: Record<string, string> = {
   bad_address: "This address is not valid for the selected coin and network. Check it and try again",
   address_blocked: "Withdrawals to this address are not allowed. Please contact support",
   deposit_only: "This method is for deposits only",
+  bad_file_type: "Only JPG, PNG and PDF files are accepted",
+  file_too_large: "Files can be up to 5 MB",
+  no_file: "Choose a file to upload",
+  bad_id_type: "Choose the type of your identity document",
+  already_approved: "This document is already approved",
+  already_verified: "Your account is already verified",
+  profile_locked: "Your account is verified. Contact support to change your details",
+  bad_full_name: "Enter your first and last name as shown on your ID",
+  bad_home_address: "Enter your street address and city",
+  invalid_birth_date: "Check your date of birth",
 };
 
 function errorText(code?: string, fallback?: string) {
@@ -63,15 +91,22 @@ function errorText(code?: string, fallback?: string) {
     const limit = fallback?.match(/\$[\d,.]+/)?.[0] ?? "the limit";
     return `Max bet is ${limit} while a bonus is active. Lower your bet, or finish or cancel the bonus on the Promotions page.`;
   }
-  if (code === "amount_too_small" && fallback) return fallback.charAt(0).toUpperCase() + fallback.slice(1);
-  return (code && messages[code]) || fallback || "Request failed";
+  if (code && messages[code]) return messages[code];
+  return fallback ? fallback.charAt(0).toUpperCase() + fallback.slice(1) : "Request failed";
 }
 
 export const money = (cents: number) =>
   (cents < 0 ? "-$" : "$") + (Math.abs(cents) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export type Balance = { currency: string; real: number; bonus: number; locked: number };
-export type Me = { id: string; email: string; country: string; verification: string; status: string; created_at: string; balance: Balance };
+export type Exclusion = {
+  id: number; kind: "timeout" | "self_exclusion"; duration: string; starts_at: string; ends_at: string | null; by_staff: boolean;
+  reopen_requested_at: string | null; period_over: boolean; reopen_at: string | null;
+};
+export type Me = {
+  id: string; email: string; country: string; verification: string; status: string; created_at: string; balance: Balance;
+  exclusion: Exclusion | null;
+};
 export type Game = {
   id: number; slug: string; title: string; provider: string; category: string; rtp: number | null; is_new: boolean;
   studio: string; emoji: string; color: string; tags: string[] | null; description: string;

@@ -22,6 +22,7 @@ export interface PlayerRow {
   real: number;
   bonus: number;
   created_at: string;
+  rg_exclusion?: string | null;
 }
 
 export interface Player {
@@ -328,4 +329,82 @@ export interface AmlResult {
   risk: string;
   reasons: string[] | null;
   providers: string[] | null;
+}
+
+/* ---------- v0.3: responsible gaming & KYC ---------- */
+
+export interface RgLimit {
+  kind: "deposit" | "loss" | "wager" | "session";
+  period: "day" | "week" | "month";
+  amount: number | null;
+  pending: boolean;
+  pending_amount: number | null;
+  effective_at: string | null;
+  updated_at: string;
+  used: number;
+}
+
+export interface RgExclusion {
+  id: number;
+  kind: "timeout" | "self_exclusion";
+  duration: string;
+  starts_at: string;
+  ends_at: string | null;
+  by_staff: boolean;
+  reason?: string;
+  reopen_requested_at: string | null;
+  period_over: boolean;
+  reopen_at: string | null;
+}
+
+export interface RgEvent {
+  id: number;
+  action: string;
+  kind: string;
+  period: string;
+  before: Json | null;
+  after: Json | null;
+  created_at: string;
+  staff: string | null;
+}
+
+export interface PlayerRg {
+  limits: RgLimit[] | null;
+  reality_check_minutes: number;
+  exclusion: RgExclusion | null;
+  history: RgEvent[] | null;
+}
+
+export interface KycDocument {
+  id: number;
+  kind: string;
+  id_type: string;
+  file_name: string;
+  content_type: string;
+  size: number;
+  status: "pending" | "approved" | "rejected";
+  reject_reason: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  created_at: string;
+}
+
+export interface KycOverview {
+  verification: string;
+  profile: { full_name: string; birth_date: string; country: string; address: string; city: string; postal_code: string };
+  required: string[];
+  missing: string[];
+  documents: KycDocument[] | null;
+}
+
+export interface KycQueueItem {
+  player_id: string;
+  email: string;
+  full_name: string;
+  country: string;
+  verification: string;
+  pending_docs: number;
+  documents: number;
+  oldest_pending_at: string | null;
+  last_uploaded_at: string | null;
 }

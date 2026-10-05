@@ -26,6 +26,7 @@ import (
 	"github.com/mbobrenko/a2casino/backend/internal/config"
 	"github.com/mbobrenko/a2casino/backend/internal/httpx"
 	"github.com/mbobrenko/a2casino/backend/internal/promo"
+	"github.com/mbobrenko/a2casino/backend/internal/rg"
 	"github.com/mbobrenko/a2casino/backend/internal/wallet"
 )
 
@@ -101,6 +102,9 @@ func (s *Service) Deposit(w http.ResponseWriter, r *http.Request) error {
 	pid := auth.From(r.Context()).Subject
 	var req depositReq
 	if err := httpx.Decode(r, &req); err != nil {
+		return err
+	}
+	if err := rg.CheckDeposit(r.Context(), s.Wallet.Pool, pid, req.Amount); err != nil {
 		return err
 	}
 	m, ok := s.methodBy(req.Method, "deposit")

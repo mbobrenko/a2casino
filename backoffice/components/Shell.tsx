@@ -7,7 +7,7 @@ import { clearSession, getStaff, getToken } from "@/lib/api";
 
 const NAV: { group?: string; items: { href: string; label: string }[] }[] = [
   { items: [{ href: "/", label: "Дашборд" }] },
-  { group: "Игроки", items: [{ href: "/players", label: "Игроки" }] },
+  { group: "Игроки", items: [{ href: "/players", label: "Игроки" }, { href: "/kyc", label: "Верификация (KYC)" }] },
   { group: "Финансы", items: [{ href: "/withdrawals", label: "Выводы" }, { href: "/aml", label: "AML: проверка адресов" }] },
   { group: "Каталог", items: [{ href: "/games", label: "Игры" }] },
   {

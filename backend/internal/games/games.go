@@ -22,6 +22,7 @@ import (
 	"github.com/mbobrenko/a2casino/backend/internal/httpx"
 	"github.com/mbobrenko/a2casino/backend/internal/player"
 	"github.com/mbobrenko/a2casino/backend/internal/promo"
+	"github.com/mbobrenko/a2casino/backend/internal/rg"
 	"github.com/mbobrenko/a2casino/backend/internal/wallet"
 )
 
@@ -117,7 +118,7 @@ func (s *Service) checkPlayerCanPlay(ctx context.Context, pid uuid.UUID) error {
 	if status != "active" {
 		return httpx.Err(403, "blocked", "account is blocked")
 	}
-	return nil
+	return rg.CheckPlay(ctx, s.Wallet.Pool, pid)
 }
 
 // ---- Seamless wallet callbacks (provider -> casino) ----
@@ -224,6 +225,9 @@ func (s *Service) CBBet(w http.ResponseWriter, r *http.Request) error {
 		}
 		if status == "rolled_back" {
 			return httpx.Err(409, "round_closed", "round was rolled back")
+		}
+		if err := rg.CheckBet(ctx, tx, pid, req.Amount, "mock:bet:"+req.TxID); err != nil {
+			return err
 		}
 		real, bonus, res, err := s.Wallet.Bet(ctx, tx, pid, req.Amount, "mock:bet:"+req.TxID, map[string]any{"round_id": req.RoundID, "game_id": gid})
 		if errors.Is(err, wallet.ErrInsufficientFunds) {

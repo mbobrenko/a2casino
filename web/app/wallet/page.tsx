@@ -102,12 +102,13 @@ export default function Wallet() {
       <h1>Wallet</h1>
       <p className="muted" style={{ marginTop: -8 }}>
         Limits, processing and checks are explained in <Link href="/legal/payments" className="terms-link">Payments & Withdrawals</Link>.
+        Set a deposit limit on the <Link href="/responsible-gaming" className="terms-link">Responsible gaming</Link> page.
       </p>
       <div className="tiles">
         <div className="tile"><div className="muted">Real balance</div><div className="v">{money(b.real)}</div></div>
         <div className="tile"><div className="muted">Bonus balance</div><div className="v">{money(b.bonus)}</div></div>
         <div className="tile"><div className="muted">Pending withdrawal</div><div className="v">{money(b.locked)}</div></div>
-        <div className="tile"><div className="muted">Verification</div><div className="v">{me.verification === "verified" ? "Verified" : "Not verified"}</div></div>
+        <div className="tile"><div className="muted">Verification</div><div className="v">{me.verification === "verified" ? "Verified" : me.verification === "pending" ? "Under review" : "Not verified"}</div></div>
       </div>
 
       <div className="cols" style={{ marginTop: 20 }}>
@@ -138,7 +139,7 @@ export default function Wallet() {
             {tab === "deposit"
               ? <button className="btn gold" onClick={deposit}>{m?.kind === "crypto" ? "Show address" : "Proceed to payment"}</button>
               : <button className="btn gold" onClick={withdraw}>Request withdrawal</button>}
-            {tab === "withdraw" && me.verification !== "verified" && <p className="muted">Withdrawals are available after verification (KYC).</p>}
+            {tab === "withdraw" && me.verification !== "verified" && <p className="muted">Withdrawals are available after verification (KYC). <Link href="/profile#verification" className="terms-link">Verify your account</Link></p>}
           </div>
           {crypto && (
             <div style={{ marginTop: 16 }}>

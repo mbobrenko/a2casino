@@ -74,7 +74,7 @@ export default function Terms() {
           title: "Verification (KYC)",
           items: [
             <p key="a">We are required to verify the identity, age and address of our customers and, in some cases, the source of their funds. Verification is explained in the <L to="kyc-aml" />.</p>,
-            <p key="b">You must complete verification before your first withdrawal. We may also ask for verification at any other time, for example when a risk check, payment provider or regulator requires it. While we wait for documents we may suspend play, deposits or withdrawals.</p>,
+            <p key="b">You must complete verification before your first withdrawal: enter your personal details and upload your identity document, proof of address and a selfie with your document in the Verification section of your profile ({RULES.kycFormats}, up to {RULES.kycMaxFile} per file). Your account is verified once our team has approved every document. We may also ask for verification at any other time, for example when a risk check, payment provider or regulator requires it. While we wait for documents we may suspend play, deposits or withdrawals.</p>,
             <p key="c">If you do not provide the requested documents within a reasonable time, provide false or altered documents, or we cannot verify you, we may close the account. Where documents are false or we suspect fraud, winnings may be voided and the matter reported to the authorities.</p>,
           ],
         },
@@ -126,7 +126,7 @@ export default function Terms() {
         {
           title: "Suspension and closure of accounts",
           items: [
-            <p key="a">You may close your account at any time by contacting {co.supportEmail}. If you close your account for gambling-related reasons, please tell us so that we can treat it as self-exclusion (see <L to="responsible-gaming" />).</p>,
+            <p key="a">You may close your account at any time by contacting {co.supportEmail}. If you want to stop gambling, use the time-out or self-exclusion on the Responsible gaming page of your account instead, or tell us so that we can treat the closure as self-exclusion (see <L to="responsible-gaming" />).</p>,
             <>
               <p>We may suspend or close an account, block withdrawals, or limit the services available to you if:</p>
               <ul className="list">
@@ -138,7 +138,7 @@ export default function Terms() {
                 <li>you behave in an abusive or threatening way towards our staff.</li>
               </ul>
             </>,
-            <p key="c">While an account is suspended you cannot log in, play or withdraw. We will explain the reason where the law allows and tell you what you can do. When an account is closed, the verified real balance is paid to you, to a crypto wallet address you give us, after any checks have been completed, minus amounts that are void under these Terms. Bonus balances and unclaimed rewards are forfeited when an account is closed.</p>,
+            <p key="c">A time-out or self-exclusion is not a suspension: you can still log in to see your balance and withdraw, but you cannot deposit, play or receive bonuses until it ends (see <L to="responsible-gaming" />). While an account is suspended you cannot log in, play or withdraw. We will explain the reason where the law allows and tell you what you can do. When an account is closed, the verified real balance is paid to you, to a crypto wallet address you give us, after any checks have been completed, minus amounts that are void under these Terms. Bonus balances and unclaimed rewards are forfeited when an account is closed.</p>,
           ],
         },
         {
@@ -152,7 +152,8 @@ export default function Terms() {
         {
           title: "Responsible gaming",
           items: [
-            <p key="a">Gambling should be entertainment, not a way to make money. Information, warning signs and the help we offer, including self-exclusion, are in <L to="responsible-gaming" />.</p>,
+            <p key="a">Gambling should be entertainment, not a way to make money. Information, warning signs and the help we offer are in <L to="responsible-gaming" />.</p>,
+            <p key="b">You can set deposit, loss, wagering and play-time limits, turn on reality-check reminders, take a time-out of {RULES.timeouts}, or self-exclude for {RULES.selfExclusions}, yourself, on the Responsible gaming page of your account. Lower limits apply immediately; higher limits or the removal of a limit apply after {RULES.coolingOffHours} hours. A self-exclusion cannot be cancelled or shortened, and we may also apply limits or exclusions ourselves where we have concerns.</p>,
           ],
         },
         {

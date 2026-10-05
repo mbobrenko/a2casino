@@ -23,6 +23,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/mbobrenko/a2casino/backend/internal/httpx"
+	"github.com/mbobrenko/a2casino/backend/internal/rg"
 	"github.com/mbobrenko/a2casino/backend/internal/slot"
 	"github.com/mbobrenko/a2casino/backend/internal/wallet"
 )
@@ -116,6 +117,9 @@ func (s *Service) give(ctx context.Context, tx pgx.Tx, player uuid.UUID, b Bonus
 	if !b.Active {
 		return 0, httpx.Err(410, "bonus_inactive", "this bonus is no longer available")
 	}
+	if err := rg.CheckBonus(ctx, tx, player); err != nil {
+		return 0, err
+	}
 	expires := time.Now().Add(time.Duration(max(b.ValidDays, 1)) * 24 * time.Hour)
 	if b.Kind == "deposit_match" {
 		var id int64
@@ -188,6 +192,9 @@ func isHTTP(err error) bool {
 // OnDeposit activates the oldest pending deposit bonus the deposit qualifies for.
 func (s *Service) OnDeposit(ctx context.Context, tx pgx.Tx, player uuid.UUID, amount int64) error {
 	if active, err := hasActive(ctx, tx, player); err != nil || active {
+		return err
+	}
+	if off, err := rg.Suppressed(ctx, tx, player); err != nil || off {
 		return err
 	}
 	var pbID int64
@@ -396,6 +403,9 @@ type FreeSpinResult struct {
 // after the last spin the wagering requirement becomes total win x multiplier.
 func (s *Service) FreeSpin(ctx context.Context, tx pgx.Tx, player uuid.UUID, pbID int64) (FreeSpinResult, error) {
 	var res FreeSpinResult
+	if err := rg.CheckBonus(ctx, tx, player); err != nil {
+		return res, err
+	}
 	var bonusID int64
 	var left int
 	var won int64
