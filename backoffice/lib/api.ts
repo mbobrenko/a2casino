@@ -118,6 +118,10 @@ export const ERROR_RU: Record<string, string> = {
   bad_rakeback: "Рейкбэк должен быть от 0 до 5% оборота",
   bad_valid_days: "Срок действия — минимум 1 день",
   forbidden: "Недостаточно прав для этого действия",
+  address_blocked: "Адрес в санкционном или чёрном списке: вывод нужно отклонить",
+  sanctioned: "Адрес в санкционном списке OFAC, изменить нельзя",
+  bad_address: "Введите адрес кошелька",
+  bad_list: "Неизвестный список",
 };
 
 export function errMsg(e: unknown): string {

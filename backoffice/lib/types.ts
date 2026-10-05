@@ -123,6 +123,8 @@ export interface Withdrawal {
   amount: number;
   status: string;
   address: string | null;
+  risk: string | null;
+  risk_reasons: string[] | null;
   created_at: string;
   first_deposit_at: string | null;
   deposits_count: number;
@@ -268,4 +270,33 @@ export interface PlayerBonus {
   created_at: string;
   expires_at: string | null;
   finished_at: string | null;
+}
+
+export interface AmlAddress {
+  address: string;
+  list: string;
+  network: string;
+  reason: string;
+  added_by: string | null;
+  created_at: string;
+}
+
+export interface AmlScreening {
+  id: number;
+  address: string;
+  network: string;
+  player_id: string | null;
+  player_email: string | null;
+  payment_id: string | null;
+  context: string;
+  risk: string;
+  reasons: string[] | null;
+  providers: string[] | null;
+  created_at: string;
+}
+
+export interface AmlResult {
+  risk: string;
+  reasons: string[] | null;
+  providers: string[] | null;
 }

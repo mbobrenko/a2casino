@@ -201,6 +201,9 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   vip_update: "VIP-уровень изменён",
   banner_create: "Баннер создан",
   banner_update: "Баннер изменён",
+  aml_blacklist_add: "Адрес в чёрный список",
+  aml_whitelist_add: "Адрес в белый список",
+  aml_address_remove: "Адрес удалён из списков",
 };
 
 /** Short human description of what the bonus gives. */
@@ -219,3 +222,19 @@ export function bonusTerms(b: Bonus): string {
   return parts.join(" · ");
 }
 
+
+export const RISK_LABELS: Record<string, string> = {
+  low: "Низкий",
+  medium: "Средний",
+  high: "Высокий",
+  severe: "Запрещён",
+};
+
+export const RISK_TONES: Record<string, string> = { low: "ok", medium: "warn", high: "bad", severe: "bad" };
+
+export const AML_CONTEXT_LABELS: Record<string, string> = {
+  withdrawal: "Заявка на вывод",
+  approval: "Одобрение вывода",
+  deposit: "Депозит",
+  manual: "Ручная проверка",
+};

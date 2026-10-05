@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/mbobrenko/a2casino/backend/internal/aml"
 	"github.com/mbobrenko/a2casino/backend/internal/auth"
 	"github.com/mbobrenko/a2casino/backend/internal/backoffice"
 	"github.com/mbobrenko/a2casino/backend/internal/config"
@@ -46,6 +47,7 @@ func main() {
 	}
 
 	go expireBonuses(ctx, &promo.Service{Wallet: w})
+	go syncSanctions(ctx, &aml.Service{Pool: pool})
 
 	srv := &http.Server{Addr: cfg.Addr, Handler: Router(cfg, w, issuer), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
@@ -75,12 +77,38 @@ func expireBonuses(ctx context.Context, s *promo.Service) {
 	}
 }
 
+// syncSanctions loads the bundled OFAC address list, then refreshes it online once a day.
+func syncSanctions(ctx context.Context, s *aml.Service) {
+	if n, err := s.SyncOFAC(ctx, false); err != nil {
+		log.Printf("aml: ofac snapshot: %v", err)
+	} else {
+		log.Printf("aml: %d sanctioned addresses loaded", n)
+	}
+	for {
+		if n, err := s.SyncOFAC(ctx, true); err != nil {
+			log.Printf("aml: ofac refresh: %v", err)
+		} else {
+			log.Printf("aml: ofac list refreshed, %d addresses", n)
+		}
+		time.Sleep(24 * time.Hour)
+	}
+}
+
+func amlService(cfg config.Config, w *wallet.Wallet) *aml.Service {
+	s := &aml.Service{Pool: w.Pool}
+	if cfg.ChainalysisAPIKey != "" {
+		s.Providers = append(s.Providers, aml.Chainalysis{APIKey: cfg.ChainalysisAPIKey})
+	}
+	return s
+}
+
 func Router(cfg config.Config, w *wallet.Wallet, issuer *auth.Issuer) http.Handler {
 	pr := &promo.Service{Wallet: w}
 	players := &player.Service{Cfg: cfg, Wallet: w, Auth: issuer, Promo: pr}
 	gm := &games.Service{Cfg: cfg, Wallet: w, Auth: issuer, Promo: pr}
-	pay := &payments.Service{Cfg: cfg, Wallet: w, Promo: pr}
-	bo := &backoffice.Service{Wallet: w, Auth: issuer, Payments: pay, Promo: pr}
+	am := amlService(cfg, w)
+	pay := &payments.Service{Cfg: cfg, Wallet: w, Promo: pr, AML: am}
+	bo := &backoffice.Service{Wallet: w, Auth: issuer, Payments: pay, Promo: pr, AML: am}
 	h := httpx.Handler
 
 	r := chi.NewRouter()
@@ -154,6 +182,9 @@ func Router(cfg config.Config, w *wallet.Wallet, issuer *auth.Issuer) http.Handl
 				r.Get("/vip", h(bo.VipLevels))
 				r.Get("/banners", h(bo.Banners))
 				r.Get("/audit", h(bo.AuditLog))
+				r.Get("/aml/addresses", h(bo.AMLAddresses))
+				r.Get("/aml/screenings", h(bo.AMLScreenings))
+				r.Post("/aml/check", h(bo.AMLCheck))
 			})
 			// Marketing and catalog management.
 			r.Group(func(r chi.Router) {
@@ -176,6 +207,8 @@ func Router(cfg config.Config, w *wallet.Wallet, issuer *auth.Issuer) http.Handl
 				r.Get("/withdrawals", h(bo.Withdrawals))
 				r.Post("/withdrawals/{id}/approve", h(bo.Approve()))
 				r.Post("/withdrawals/{id}/reject", h(bo.Reject()))
+				r.Post("/aml/addresses", h(bo.AMLAddAddress))
+				r.Post("/aml/addresses/remove", h(bo.AMLRemoveAddress))
 			})
 		})
 	})

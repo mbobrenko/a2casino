@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -34,13 +36,14 @@ func TestNOWPaymentsDeposit(t *testing.T) {
 		t.Fatal(err)
 	}
 	var invoiceReq map[string]any
+	invoiceID := fmt.Sprint(time.Now().UnixNano()) // unique per run, the test DB is reused
 	gw := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/invoice" || r.Header.Get("x-api-key") != "test-key" {
 			w.WriteHeader(401)
 			return
 		}
 		_ = json.NewDecoder(r.Body).Decode(&invoiceReq)
-		w.Write([]byte(`{"id":"4522625843","order_id":"x","invoice_url":"https://sandbox.nowpayments.io/payment/?iid=4522625843"}`))
+		json.NewEncoder(w).Encode(map[string]any{"id": invoiceID, "order_id": "x", "invoice_url": "https://sandbox.nowpayments.io/payment/?iid=" + invoiceID})
 	}))
 	defer gw.Close()
 	cfg := config.Load()
@@ -72,7 +75,7 @@ func TestNOWPaymentsDeposit(t *testing.T) {
 	_, reg := call("/api/auth/register", "", "", map[string]any{"email": uuid.NewString() + "@t.io", "password": "secret123", "country": "MX", "birth_date": "1990-05-05"})
 	token := reg["token"].(string)
 	code, dep := call("/api/payments/deposit", token, "", map[string]any{"method": "nowpayments", "amount": 2500})
-	if code != 200 || dep["url"] != "https://sandbox.nowpayments.io/payment/?iid=4522625843" {
+	if code != 200 || dep["url"] != "https://sandbox.nowpayments.io/payment/?iid="+invoiceID {
 		t.Fatalf("deposit: %d %v", code, dep)
 	}
 	if invoiceReq["price_amount"].(float64) != 25 || invoiceReq["order_id"] != dep["payment_id"] {

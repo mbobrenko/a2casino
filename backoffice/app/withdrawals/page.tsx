@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import ActionModal from "@/components/ActionModal";
-import { StatusBadge, Tags, VerificationBadge } from "@/components/Badge";
+import { RiskBadge, StatusBadge, Tags, VerificationBadge } from "@/components/Badge";
 import { api, errMsg } from "@/lib/api";
 import { dateOnly, dt, hours, money } from "@/lib/format";
 import type { Items, Withdrawal } from "@/lib/types";
@@ -68,6 +68,7 @@ export default function WithdrawalsPage() {
               <th>Метод / адрес</th>
               <th className="num">Сумма</th>
               <th>Статус</th>
+              <th title="Проверка адреса кошелька (санкции, чёрный список, общий адрес)">Риск адреса</th>
               <th>Первый деп.</th>
               <th className="num">Деп. кол-во</th>
               <th className="num">Деп. сумма</th>
@@ -100,6 +101,10 @@ export default function WithdrawalsPage() {
                   <td>
                     <StatusBadge value={w.status} />
                   </td>
+                  <td>
+                    <RiskBadge value={w.risk} reasons={w.risk_reasons} />
+                    {w.risk_reasons && w.risk_reasons.length > 0 && <div className="muted small">{w.risk_reasons.join("; ")}</div>}
+                  </td>
                   <td className="nowrap">{dateOnly(w.first_deposit_at)}</td>
                   <td className="num">{w.deposits_count}</td>
                   <td className="num">{money(w.deposits_sum)}</td>
@@ -131,14 +136,14 @@ export default function WithdrawalsPage() {
             })}
             {rows && rows.length === 0 && (
               <tr>
-                <td colSpan={14} className="empty">
+                <td colSpan={15} className="empty">
                   Нет заявок
                 </td>
               </tr>
             )}
             {!rows && !error && (
               <tr>
-                <td colSpan={14} className="empty">
+                <td colSpan={15} className="empty">
                   Загрузка…
                 </td>
               </tr>

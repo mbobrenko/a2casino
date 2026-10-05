@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/mbobrenko/a2casino/backend/internal/aml"
 	"github.com/mbobrenko/a2casino/backend/internal/auth"
 	"github.com/mbobrenko/a2casino/backend/internal/config"
 	"github.com/mbobrenko/a2casino/backend/internal/httpx"
@@ -69,6 +70,7 @@ type Service struct {
 	Cfg    config.Config
 	Wallet *wallet.Wallet
 	Promo  *promo.Service
+	AML    *aml.Service
 }
 
 func sign(secret string, body []byte) string {
@@ -164,6 +166,27 @@ func (s *Service) Withdraw(w http.ResponseWriter, r *http.Request) error {
 	}
 	ctx := r.Context()
 	id := uuid.New()
+	// Screen the payout address first, in its own transaction, so a sanctioned address
+	// leaves a trace (log, account flag) even though the request is refused.
+	screen := aml.Result{}
+	if m.Kind == "crypto" {
+		err := s.Wallet.InTx(ctx, func(tx pgx.Tx) error {
+			var err error
+			if screen, err = s.AML.Screen(ctx, tx, m.Network, req.Address, "withdrawal", &pid, &id); err != nil {
+				return err
+			}
+			if screen.Risk == aml.Severe {
+				_, err = tx.Exec(ctx, `UPDATE players SET tags = array_append(array_remove(tags,'aml_review'),'aml_review'), withdrawals_blocked=true WHERE id=$1`, pid)
+			}
+			return err
+		})
+		if err != nil {
+			return err
+		}
+		if screen.Risk == aml.Severe {
+			return httpx.Err(403, "address_blocked", "withdrawals to this address are not allowed; contact support")
+		}
+	}
 	err := s.Wallet.InTx(ctx, func(tx pgx.Tx) error {
 		var verification, status string
 		var blocked bool
@@ -193,8 +216,15 @@ func (s *Service) Withdraw(w http.ResponseWriter, r *http.Request) error {
 			a := strings.TrimSpace(req.Address)
 			addr = &a
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO payments (id, player_id, direction, method, provider, amount, status, address) VALUES ($1,$2,'withdrawal',$3,$4,$5,'pending',$6)`,
-			id, pid, m.Code, m.Provider, req.Amount, addr)
+		var risk *string
+		if screen.Risk != "" {
+			risk = &screen.Risk
+		}
+		if screen.Reasons == nil {
+			screen.Reasons = []string{}
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO payments (id, player_id, direction, method, provider, amount, status, address, risk, risk_reasons) VALUES ($1,$2,'withdrawal',$3,$4,$5,'pending',$6,$7,$8)`,
+			id, pid, m.Code, m.Provider, req.Amount, addr, risk, screen.Reasons)
 		return err
 	})
 	if err != nil {
@@ -379,7 +409,8 @@ func (s *Service) Approve(ctx context.Context, paymentID, staffID uuid.UUID) err
 		var pid uuid.UUID
 		var amount int64
 		var status, provider string
-		err := tx.QueryRow(ctx, `SELECT player_id, amount, status, provider FROM payments WHERE id=$1 AND direction='withdrawal' FOR UPDATE`, paymentID).Scan(&pid, &amount, &status, &provider)
+		var address *string
+		err := tx.QueryRow(ctx, `SELECT player_id, amount, status, provider, address FROM payments WHERE id=$1 AND direction='withdrawal' FOR UPDATE`, paymentID).Scan(&pid, &amount, &status, &provider, &address)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return httpx.Err(404, "not_found", "withdrawal not found")
 		}
@@ -388,6 +419,16 @@ func (s *Service) Approve(ctx context.Context, paymentID, staffID uuid.UUID) err
 		}
 		if status != "pending" {
 			return httpx.Err(409, "not_pending", "withdrawal is already "+status)
+		}
+		// Re-screen at payout time: lists change between the request and the approval.
+		if address != nil {
+			res, err := s.AML.Screen(ctx, tx, "", *address, "approval", &pid, &paymentID)
+			if err != nil {
+				return err
+			}
+			if res.Risk == aml.Severe {
+				return httpx.Err(409, "address_blocked", "this address is sanctioned or blacklisted: reject the withdrawal")
+			}
 		}
 		clearing := wallet.HousePSPClearing
 		ref := "psp-" + paymentID.String()[:8]

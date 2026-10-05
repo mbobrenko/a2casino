@@ -69,6 +69,22 @@ For local testing the player's network country can be faked with the `X-Country:
 
 The player card (`GET /api/bo/players/{id}`) also returns `vip` and `vip_name`.
 
+### AML: wallet address screening
+
+Crypto withdrawal addresses are screened when the player requests the payout and again on approval:
+OFAC sanctioned addresses (bundled list, refreshed daily) and the staff blacklist are `severe` (request refused with 403
+`address_blocked`, player gets `withdrawals_blocked` + tag `aml_review`; approval refused with 409 `address_blocked`),
+an address already used by another player is `high`. With `CHAINALYSIS_API_KEY` set, Chainalysis' free sanctions API
+is also queried; if it is down the result is `medium` ("check manually"). Withdrawals carry `risk` and `risk_reasons`.
+
+| Method | Path | Body / query | Notes |
+| --- | --- | --- | --- |
+| GET | `/api/bo/aml/addresses?list=manual|ofac|blacklist|whitelist&q=` | | `{items: [{address, list, network, reason, added_by, created_at}], counts: {ofac, blacklist, whitelist}}` |
+| POST | `/api/bo/aml/addresses` | `{address, list: blacklist/whitelist, network?, comment}` | finance/admin |
+| POST | `/api/bo/aml/addresses/remove` | `{address, comment}` | staff lists only; OFAC entries can't be removed |
+| GET | `/api/bo/aml/screenings?risk=&limit=` | | screening log |
+| POST | `/api/bo/aml/check` | `{address, network?}` | `{risk: low/medium/high/severe, reasons, providers}` |
+
 ## Provider callbacks (seamless wallet)
 
 Signed with `X-Signature: hex(HMAC-SHA256(secret, body))`. Body `{token, round_id, tx_id, amount}`.

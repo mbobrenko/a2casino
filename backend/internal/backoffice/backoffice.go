@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/mbobrenko/a2casino/backend/internal/aml"
 	"github.com/mbobrenko/a2casino/backend/internal/auth"
 	"github.com/mbobrenko/a2casino/backend/internal/httpx"
 	"github.com/mbobrenko/a2casino/backend/internal/payments"
@@ -26,6 +27,7 @@ type Service struct {
 	Auth     *auth.Issuer
 	Payments *payments.Service
 	Promo    *promo.Service
+	AML      *aml.Service
 }
 
 // SeedAdmin creates the first admin account when the staff table is empty.
@@ -414,7 +416,7 @@ func (s *Service) Withdrawals(w http.ResponseWriter, r *http.Request) error {
 		status = "pending"
 	}
 	rows, err := s.Wallet.Pool.Query(r.Context(), `
-		SELECT p.id, p.player_id, pl.email, pl.verification, pl.tags, p.method, p.amount, p.status, p.address, p.created_at,
+		SELECT p.id, p.player_id, pl.email, pl.verification, pl.tags, p.method, p.amount, p.status, p.address, p.risk, p.risk_reasons, p.created_at,
 		  (SELECT min(created_at) FROM payments d WHERE d.player_id=p.player_id AND d.direction='deposit' AND d.status='completed'),
 		  (SELECT count(*) FROM payments d WHERE d.player_id=p.player_id AND d.direction='deposit' AND d.status='completed'),
 		  (SELECT COALESCE(sum(amount),0) FROM payments d WHERE d.player_id=p.player_id AND d.direction='deposit' AND d.status='completed'),
@@ -435,6 +437,8 @@ func (s *Service) Withdrawals(w http.ResponseWriter, r *http.Request) error {
 		Amount         int64      `json:"amount"`
 		Status         string     `json:"status"`
 		Address        *string    `json:"address"`
+		Risk           *string    `json:"risk"`
+		RiskReasons    []string   `json:"risk_reasons"`
 		CreatedAt      time.Time  `json:"created_at"`
 		FirstDeposit   *time.Time `json:"first_deposit_at"`
 		Deposits       int64      `json:"deposits_count"`
@@ -445,7 +449,7 @@ func (s *Service) Withdrawals(w http.ResponseWriter, r *http.Request) error {
 	}
 	list, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (item, error) {
 		var it item
-		err := row.Scan(&it.ID, &it.PlayerID, &it.Email, &it.Verification, &it.Tags, &it.Method, &it.Amount, &it.Status, &it.Address, &it.CreatedAt,
+		err := row.Scan(&it.ID, &it.PlayerID, &it.Email, &it.Verification, &it.Tags, &it.Method, &it.Amount, &it.Status, &it.Address, &it.Risk, &it.RiskReasons, &it.CreatedAt,
 			&it.FirstDeposit, &it.Deposits, &it.DepositsSum, &it.Withdrawals, &it.Turnover)
 		if it.FirstDeposit != nil {
 			h := it.CreatedAt.Sub(*it.FirstDeposit).Hours()

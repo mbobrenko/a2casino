@@ -54,6 +54,9 @@ services:
         sync: false
       - key: NOWPAYMENTS_API_URL
         value: https://api-sandbox.nowpayments.io
+      # Optional: free Chainalysis sanctions screening on top of the bundled OFAC list.
+      - key: CHAINALYSIS_API_KEY
+        sync: false
 
   - type: web
     name: a2casino-mb-web
