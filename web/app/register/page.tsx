@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api, setToken } from "@/lib/api";
@@ -20,6 +21,10 @@ export default function Register() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!agree) {
+      setError("Please confirm that you are 18 or older and accept the Terms & Conditions and Privacy Policy");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -43,9 +48,12 @@ export default function Register() {
         </select></label>
         <label>Date of birth<input type="date" value={form.birth_date} onChange={set("birth_date")} required /></label>
         <label>Promo code or referral (optional)<input value={form.ref} onChange={set("ref")} /></label>
-        <label style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
-          I am 18 or older and accept the terms
+        <label className="check">
+          <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} required />
+          <span>
+            I am 18 or older and accept the <Link href="/legal/terms" target="_blank">Terms &amp; Conditions</Link> and{" "}
+            <Link href="/legal/privacy" target="_blank">Privacy Policy</Link>
+          </span>
         </label>
         {error && <div className="error">{error}</div>}
         <button className="btn" disabled={busy || !agree}>Create account</button>

@@ -73,6 +73,9 @@ export default function Wallet() {
   return (
     <>
       <h1>Wallet</h1>
+      <p className="muted" style={{ marginTop: -8 }}>
+        Limits, processing and checks are explained in <Link href="/legal/payments" className="terms-link">Payments & Withdrawals</Link>.
+      </p>
       <div className="tiles">
         <div className="tile"><div className="muted">Real balance</div><div className="v">{money(b.real)}</div></div>
         <div className="tile"><div className="muted">Bonus balance</div><div className="v">{money(b.bonus)}</div></div>

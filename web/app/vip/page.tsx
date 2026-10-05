@@ -47,6 +47,9 @@ export default function Vip() {
       <section className="hero vip-hero">
         <h1>👑 A2 VIP Club</h1>
         <div>Earn 1 point for every $1 wagered with real money. Climb the levels to unlock cashback on losses and rakeback on every bet.</div>
+        <div style={{ marginTop: 10, fontSize: 14 }}>
+          <Link href="/legal/vip" style={{ textDecoration: "underline" }}>VIP & Loyalty Terms</Link>
+        </div>
       </section>
       {error && <p className="error">{error}</p>}
 

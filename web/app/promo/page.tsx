@@ -93,6 +93,9 @@ export default function Promo() {
   return (
     <>
       <h1>Promotions & bonuses</h1>
+      <p className="muted" style={{ marginTop: -8 }}>
+        All bonuses are subject to the <Link href="/legal/bonus-terms" className="terms-link">Bonus Terms</Link>.
+      </p>
 
       <div className="panel promo-code">
         <div>
