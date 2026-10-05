@@ -21,9 +21,11 @@ import (
 	"github.com/mbobrenko/a2casino/backend/internal/db"
 	"github.com/mbobrenko/a2casino/backend/internal/games"
 	"github.com/mbobrenko/a2casino/backend/internal/httpx"
+	"github.com/mbobrenko/a2casino/backend/internal/kyc"
 	"github.com/mbobrenko/a2casino/backend/internal/payments"
 	"github.com/mbobrenko/a2casino/backend/internal/player"
 	"github.com/mbobrenko/a2casino/backend/internal/promo"
+	"github.com/mbobrenko/a2casino/backend/internal/rg"
 	"github.com/mbobrenko/a2casino/backend/internal/wallet"
 )
 
@@ -108,7 +110,9 @@ func Router(cfg config.Config, w *wallet.Wallet, issuer *auth.Issuer) http.Handl
 	gm := &games.Service{Cfg: cfg, Wallet: w, Auth: issuer, Promo: pr}
 	am := amlService(cfg, w)
 	pay := &payments.Service{Cfg: cfg, Wallet: w, Promo: pr, AML: am}
-	bo := &backoffice.Service{Wallet: w, Auth: issuer, Payments: pay, Promo: pr, AML: am}
+	ky := &kyc.Service{Pool: w.Pool, Store: kyc.DBStore{Pool: w.Pool}}
+	rgh := &rg.Handlers{Pool: w.Pool}
+	bo := &backoffice.Service{Wallet: w, Auth: issuer, Payments: pay, Promo: pr, AML: am, KYC: ky}
 	h := httpx.Handler
 
 	r := chi.NewRouter()
@@ -148,6 +152,16 @@ func Router(cfg config.Config, w *wallet.Wallet, issuer *auth.Issuer) http.Handl
 			r.Post("/payments/deposit", h(pay.Deposit))
 			r.Post("/payments/withdraw", h(pay.Withdraw))
 			r.Get("/payments", h(pay.History))
+			r.Get("/rg", h(rgh.State))
+			r.Post("/rg/limits", h(rgh.SetLimit))
+			r.Post("/rg/reality-check", h(rgh.SetRealityCheck))
+			r.Post("/rg/exclude", h(rgh.Exclude))
+			r.Post("/rg/reopen", h(rgh.RequestReopen))
+			r.Post("/rg/session", h(rgh.Ping))
+			r.Get("/kyc", h(ky.Get))
+			r.Post("/kyc/profile", h(ky.UpdateProfile))
+			r.Post("/kyc/documents", h(ky.Upload))
+			r.Get("/kyc/documents/{id}/file", h(ky.PlayerFile))
 			if cfg.DevTools {
 				r.Post("/dev/crypto/simulate", h(pay.SimulateCrypto))
 			}
@@ -185,6 +199,18 @@ func Router(cfg config.Config, w *wallet.Wallet, issuer *auth.Issuer) http.Handl
 				r.Get("/aml/addresses", h(bo.AMLAddresses))
 				r.Get("/aml/screenings", h(bo.AMLScreenings))
 				r.Post("/aml/check", h(bo.AMLCheck))
+				r.Get("/players/{id}/rg", h(bo.PlayerRG))
+				r.Get("/players/{id}/kyc", h(bo.PlayerKYC))
+				r.Get("/kyc", h(bo.KYCQueue))
+				r.Get("/kyc/documents/{doc}/file", h(bo.KYCFile))
+			})
+			// Compliance: responsible-gaming restrictions and KYC review.
+			r.Group(func(r chi.Router) {
+				r.Use(issuer.Require("staff", "support", "finance"))
+				r.Post("/players/{id}/rg/limits", h(bo.SetPlayerLimit))
+				r.Post("/players/{id}/rg/exclude", h(bo.ExcludePlayer))
+				r.Post("/kyc/documents/{doc}/review", h(bo.ReviewKYCDocument))
+				r.Post("/players/{id}/kyc/verify", h(bo.VerifyKYC))
 			})
 			// Marketing and catalog management.
 			r.Group(func(r chi.Router) {

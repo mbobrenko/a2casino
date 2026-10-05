@@ -17,6 +17,7 @@ import (
 	"github.com/mbobrenko/a2casino/backend/internal/config"
 	"github.com/mbobrenko/a2casino/backend/internal/httpx"
 	"github.com/mbobrenko/a2casino/backend/internal/promo"
+	"github.com/mbobrenko/a2casino/backend/internal/rg"
 	"github.com/mbobrenko/a2casino/backend/internal/wallet"
 )
 
@@ -152,6 +153,9 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request) error {
 	if status == "blocked" {
 		return httpx.Err(403, "blocked", "account is blocked, contact support")
 	}
+	if err := rg.StartSession(r.Context(), s.Wallet.Pool, id); err != nil {
+		return err
+	}
 	token, err := s.Auth.Issue(id, "player", "", 24*time.Hour)
 	if err != nil {
 		return err
@@ -173,9 +177,13 @@ func (s *Service) Me(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	excl, err := rg.CurrentExclusion(r.Context(), s.Wallet.Pool, id)
+	if err != nil {
+		return err
+	}
 	httpx.JSON(w, 200, map[string]any{
 		"id": id, "email": email, "country": country, "currency": currency, "status": status,
-		"verification": verification, "created_at": created, "balance": bal,
+		"verification": verification, "created_at": created, "balance": bal, "exclusion": excl,
 	})
 	return nil
 }

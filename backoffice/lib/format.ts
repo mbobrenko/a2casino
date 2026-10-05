@@ -72,12 +72,13 @@ export const STATUS_LABELS: Record<string, string> = {
 export const VERIFICATION_LABELS: Record<string, string> = {
   new: "Новый",
   not_verified: "Не верифицирован",
+  pending: "Документы на проверке",
   manual_review: "Ручная проверка",
   duplicate: "Дубликат",
   verified: "Верифицирован",
 };
 
-export const VERIFICATIONS = ["new", "not_verified", "manual_review", "duplicate", "verified"] as const;
+export const VERIFICATIONS = ["new", "not_verified", "pending", "manual_review", "duplicate", "verified"] as const;
 
 export function statusTone(s: string): "ok" | "bad" | "warn" | "muted" | "info" {
   switch (s) {
@@ -204,6 +205,10 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   aml_blacklist_add: "Адрес в чёрный список",
   aml_whitelist_add: "Адрес в белый список",
   aml_address_remove: "Адрес удалён из списков",
+  rg_limit: "Лимит ответственной игры",
+  rg_exclusion: "Тайм-аут / самоисключение",
+  kyc_document_approve: "KYC: документ одобрен",
+  kyc_document_reject: "KYC: документ отклонён",
 };
 
 /** Short human description of what the bonus gives. */

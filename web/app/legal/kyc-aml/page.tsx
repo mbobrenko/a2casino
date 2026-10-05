@@ -1,4 +1,5 @@
 import LegalPage, { L, co, legalMetadata, pending } from "@/components/LegalPage";
+import { RULES } from "@/lib/company";
 
 export const metadata = legalMetadata("kyc-aml");
 
@@ -27,18 +28,29 @@ export default function KycAml() {
           items: [
             <p><b>At registration</b> we check your age from your date of birth and check that neither your declared country nor your network country is restricted. Accounts registered from an IP address already used by another account are flagged for review.</p>,
             <p><b>Before your first withdrawal</b> your account must be verified. Withdrawals are refused until verification is complete.</p>,
-            <p><b>At any other time</b> when our risk assessment, a payment provider, the screening described in section 5 or a regulator requires it — for example if the details you gave do not match, if several accounts appear to be linked, or if activity is unusual for your profile.</p>,
-            <p>While verification is pending we may restrict deposits, play or withdrawals. Accounts can have one of these statuses: new, not verified, under manual review, duplicate, or verified.</p>,
+            <p><b>At any other time</b> when our risk assessment, a payment provider, the screening described in section 6 or a regulator requires it — for example if the details you gave do not match, if several accounts appear to be linked, or if activity is unusual for your profile.</p>,
+            <p>While verification is pending we may restrict deposits, play or withdrawals. Accounts can have one of these statuses: new, not verified, documents under review, under manual review, duplicate, or verified.</p>,
           ],
         },
         {
-          title: "Documents we may ask for",
+          title: "Documents we ask for",
           items: [
-            <p><b>Identity:</b> a clear colour copy of a valid passport, national identity card or driving licence showing your full name, date of birth, photo and expiry date.</p>,
+            <p><b>Personal details:</b> your full name as shown on your identity document, date of birth (you must be {RULES.minAge} or older), country and residential address, entered in the Verification section of your profile.</p>,
+            <p><b>Identity:</b> a clear colour copy of a valid passport, national identity card or driving licence showing your full name, date of birth, photo and expiry date — the front, and the back for an identity card or driving licence.</p>,
             <p><b>Proof of address:</b> a utility bill, bank statement or official letter issued in the last 3 months showing your name and address.</p>,
-            <p><b>Selfie</b> or a short live check holding your identity document, to confirm that it belongs to you.</p>,
-            <p><b>Payment method:</b> a photo of your card (with the middle digits covered and the CVV hidden), a bank statement, or proof that you control the crypto wallet you use (for example, a screenshot of the wallet or a small test transaction).</p>,
-            <p>Documents can be submitted through {co.kycProvider} or as instructed by our support team at {co.supportEmail}. We may ask for documents again when they expire or if we have doubts about them. Altered or false documents lead to closure of the account and may be reported.</p>,
+            <p><b>Selfie</b> holding your identity document next to your face, to confirm that it belongs to you.</p>,
+            <p><b>Payment method</b>, when needed: a photo of your card (with the middle digits covered and the CVV hidden), a bank statement, or proof that you control the crypto wallet you use (for example, a screenshot of the wallet or a small test transaction). Our support team at {co.supportEmail} will tell you how to send these.</p>,
+            <p>We may ask for documents again when they expire or if we have doubts about them. Altered or false documents lead to closure of the account and may be reported.</p>,
+          ],
+        },
+        {
+          title: "How to upload documents and how we review them",
+          items: [
+            <p>Upload your documents in <b>Profile → Verification</b>. Each file must be a {RULES.kycFormats} of up to {RULES.kycMaxFile}. We check the file contents, not just the file name, and refuse other formats. Make sure the whole document is visible, in focus and not cut off, and that all four corners are shown.</p>,
+            <p>Uploaded files are sent over an encrypted connection and stored on our own systems with access restricted. They are visible only to you and to our verification and compliance staff, are never cached by your browser, and are kept as described in section 9 and the <L to="privacy" />.</p>,
+            <p>Each document is reviewed by a member of our verification team and shown as <b>under review</b>, <b>approved</b> or <b>rejected</b>. If a document is rejected you will see the reason on the Verification page and can upload a new one; a document that has been approved cannot be replaced.</p>,
+            <p>Once your details are complete and all required documents are uploaded, your account status changes to <b>documents under review</b>. Your identity is confirmed — and your account becomes <b>verified</b> — only after every required document has been approved. Withdrawals are available once the account is verified. After verification, contact {co.supportEmail} to change your personal details.</p>,
+            <p>Every review decision is recorded with the name of the staff member who made it.</p>,
           ],
         },
         {

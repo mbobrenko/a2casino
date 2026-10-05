@@ -70,6 +70,14 @@ export const RULES = {
   minRewardClaim: "$1.00",
   cryptoConfirmations: 3,
   sessionHours: 24,
+  /** Responsible gaming (backend/internal/rg). */
+  coolingOffHours: 24,
+  reopenDelayHours: 24,
+  timeouts: "24 hours, 7 days, 30 days or 6 weeks",
+  selfExclusions: "6 months, 1 year, 5 years or permanently",
+  /** KYC uploads (backend/internal/kyc). */
+  kycFormats: "JPG, PNG or PDF",
+  kycMaxFile: "5 MB",
 };
 
 export type LegalPageInfo = { slug: string; title: string; summary: string };

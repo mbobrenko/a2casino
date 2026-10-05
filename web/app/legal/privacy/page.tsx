@@ -67,7 +67,7 @@ export default function Privacy() {
           items: [
             <p><b>Payment providers</b>, including our crypto payment gateway NOWPayments and card processors: the payment amount, a payment reference and, for crypto, wallet addresses and transaction data.</p>,
             <p><b>Game providers</b>: a session identifier for your account, your currency, bets and wins, so the game can run and settle rounds.</p>,
-            <p><b>Verification and screening providers</b>: {co.kycProvider} for identity verification, and blockchain analytics or sanctions screening services (for example Chainalysis) which receive crypto wallet addresses only.</p>,
+            <p><b>Verification and screening providers</b>: {co.kycProvider} for identity verification, if we use one (documents you upload in your profile are stored on our own systems, hosted by {co.hostingProvider}), and blockchain analytics or sanctions screening services (for example Chainalysis) which receive crypto wallet addresses only.</p>,
             <p><b>Infrastructure providers</b>: hosting ({co.hostingProvider}), content delivery and security services, and email providers.</p>,
             <p><b>Authorities</b>: our licensing authority, financial intelligence units, law enforcement and courts, where the law requires or allows it.</p>,
             <p><b>Professional advisers and auditors</b>, and a buyer or successor of our business if it is sold or restructured.</p>,

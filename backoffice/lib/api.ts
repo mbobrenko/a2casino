@@ -122,7 +122,26 @@ export const ERROR_RU: Record<string, string> = {
   sanctioned: "Адрес в санкционном списке OFAC, изменить нельзя",
   bad_address: "Введите адрес кошелька",
   bad_list: "Неизвестный список",
+  not_stricter: "Сотрудник может только установить лимит или сделать его строже",
+  exclusion_active: "Уже действует ограничение не короче этого: сократить его нельзя",
+  bad_duration: "Неизвестный срок",
+  bad_period: "Этот период недоступен для лимита",
+  bad_amount: "Некорректная сумма",
+  docs_not_approved: "Сначала одобрите все обязательные документы",
+  reason_required: "Укажите причину отклонения — её увидит игрок",
+  already_verified: "Игрок уже верифицирован",
+  timeout: "Игрок на тайм-ауте: бонусы недоступны",
+  self_excluded: "Игрок самоисключён: бонусы недоступны",
 };
+
+/** Downloads a staff-only file (needs the auth header) and returns an object URL for <img> or a new tab. */
+export async function fileURL(path: string): Promise<string> {
+  const t = getToken();
+  const res = await fetch(API_URL + path, { headers: t ? { Authorization: `Bearer ${t}` } : {}, cache: "no-store" });
+  if (res.status === 401) redirectToLogin();
+  if (!res.ok) throw new ApiError(res.status, "error", `HTTP ${res.status}`);
+  return URL.createObjectURL(await res.blob());
+}
 
 export function errMsg(e: unknown): string {
   if (e instanceof ApiError && ERROR_RU[e.code]) return `${ERROR_RU[e.code]} (${e.code})`;

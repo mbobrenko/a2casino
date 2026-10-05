@@ -2,18 +2,26 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { StatusBadge, Tags, VerificationBadge } from "@/components/Badge";
+import { Badge, StatusBadge, Tags, VerificationBadge } from "@/components/Badge";
 import { api, errMsg } from "@/lib/api";
 import { dt, money } from "@/lib/format";
 import type { Items, PlayerRow } from "@/lib/types";
 
 const PAGE = 50;
 
+const RG_FILTERS = [
+  { value: "", label: "Все игроки" },
+  { value: "excluded", label: "Тайм-аут или самоисключение" },
+  { value: "self_excluded", label: "Самоисключённые" },
+  { value: "timeout", label: "На тайм-ауте" },
+];
+
 export default function PlayersPage() {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
   const [offset, setOffset] = useState(0);
+  const [rg, setRg] = useState("");
   const [rows, setRows] = useState<PlayerRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -24,6 +32,7 @@ export default function PlayersPage() {
     try {
       const params = new URLSearchParams({ limit: String(PAGE), offset: String(offset) });
       if (query) params.set("q", query);
+      if (rg) params.set("rg", rg);
       const r = await api<Items<PlayerRow>>(`/api/bo/players?${params}`);
       setRows(r.items || []);
     } catch (e) {
@@ -31,7 +40,7 @@ export default function PlayersPage() {
     } finally {
       setLoading(false);
     }
-  }, [query, offset]);
+  }, [query, offset, rg]);
 
   useEffect(() => {
     load();
@@ -57,6 +66,20 @@ export default function PlayersPage() {
           autoFocus
         />
         <button className="btn btn-primary">Найти</button>
+        <select
+          value={rg}
+          aria-label="Ответственная игра"
+          onChange={(e) => {
+            setOffset(0);
+            setRg(e.target.value);
+          }}
+        >
+          {RG_FILTERS.map((f) => (
+            <option key={f.value} value={f.value}>
+              {f.label}
+            </option>
+          ))}
+        </select>
         {query && (
           <button
             type="button"
@@ -97,6 +120,14 @@ export default function PlayersPage() {
                 <td>{p.country}</td>
                 <td>
                   <StatusBadge value={p.status} />
+                  {p.rg_exclusion && (
+                    <>
+                      {" "}
+                      <Badge tone={p.rg_exclusion === "timeout" ? "warn" : "bad"}>
+                        {p.rg_exclusion === "timeout" ? "Тайм-аут" : "Самоисключение"}
+                      </Badge>
+                    </>
+                  )}
                 </td>
                 <td>
                   <VerificationBadge value={p.verification} />

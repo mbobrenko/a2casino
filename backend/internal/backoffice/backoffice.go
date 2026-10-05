@@ -17,8 +17,10 @@ import (
 	"github.com/mbobrenko/a2casino/backend/internal/aml"
 	"github.com/mbobrenko/a2casino/backend/internal/auth"
 	"github.com/mbobrenko/a2casino/backend/internal/httpx"
+	"github.com/mbobrenko/a2casino/backend/internal/kyc"
 	"github.com/mbobrenko/a2casino/backend/internal/payments"
 	"github.com/mbobrenko/a2casino/backend/internal/promo"
+	"github.com/mbobrenko/a2casino/backend/internal/rg"
 	"github.com/mbobrenko/a2casino/backend/internal/wallet"
 )
 
@@ -28,6 +30,7 @@ type Service struct {
 	Payments *payments.Service
 	Promo    *promo.Service
 	AML      *aml.Service
+	KYC      *kyc.Service
 }
 
 // SeedAdmin creates the first admin account when the staff table is empty.
@@ -73,20 +76,24 @@ type PlayerRow struct {
 	Real         int64     `json:"real"`
 	Bonus        int64     `json:"bonus"`
 	CreatedAt    time.Time `json:"created_at"`
+	Exclusion    *string   `json:"rg_exclusion"` // timeout | self_exclusion in force
 }
 
 func (s *Service) Players(w http.ResponseWriter, r *http.Request) error {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	excl := r.URL.Query().Get("rg") // "" | excluded | self_excluded | timeout
 	limit := httpx.IntQuery(r, "limit", 50, 200)
 	offset := httpx.IntQuery(r, "offset", 0, 1_000_000)
 	rows, err := s.Wallet.Pool.Query(r.Context(), `
 		SELECT p.id, p.email, p.country, p.status, p.verification, p.tags,
 		       COALESCE((SELECT balance FROM accounts a WHERE a.player_id=p.id AND a.kind='real'),0),
 		       COALESCE((SELECT balance FROM accounts a WHERE a.player_id=p.id AND a.kind='bonus'),0),
-		       p.created_at
+		       p.created_at, x.kind
 		FROM players p
-		WHERE $1='' OR p.email ILIKE '%'||$1||'%' OR p.id::text=$1 OR $1 = ANY(p.tags)
-		ORDER BY p.created_at DESC LIMIT $2 OFFSET $3`, q, limit, offset)
+		LEFT JOIN LATERAL (SELECT e.kind FROM rg_exclusions e WHERE e.player_id=p.id AND `+rg.ActiveExclusionSQL+`) x ON true
+		WHERE ($1='' OR p.email ILIKE '%'||$1||'%' OR p.id::text=$1 OR $1 = ANY(p.tags))
+		  AND ($4='' OR ($4='excluded' AND x.kind IS NOT NULL) OR ($4='self_excluded' AND x.kind='self_exclusion') OR x.kind=$4)
+		ORDER BY p.created_at DESC LIMIT $2 OFFSET $3`, q, limit, offset, excl)
 	if err != nil {
 		return err
 	}
@@ -301,7 +308,7 @@ type actionReq struct {
 
 var (
 	validStatus       = map[string]bool{"active": true, "blocked": true}
-	validVerification = map[string]bool{"new": true, "not_verified": true, "manual_review": true, "duplicate": true, "verified": true}
+	validVerification = map[string]bool{"new": true, "not_verified": true, "pending": true, "manual_review": true, "duplicate": true, "verified": true}
 )
 
 // Update applies one account action (status, verification, withdrawal block, tag) with a mandatory comment.

@@ -19,6 +19,7 @@ import (
 
 	"github.com/mbobrenko/a2casino/backend/internal/auth"
 	"github.com/mbobrenko/a2casino/backend/internal/httpx"
+	"github.com/mbobrenko/a2casino/backend/internal/rg"
 	"github.com/mbobrenko/a2casino/backend/internal/wallet"
 )
 
@@ -129,6 +130,9 @@ func (s *Service) DiceBet(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 		roundID := fmt.Sprintf("%s:%s:%d", pid, hashSeed(st.ServerSeed)[:16], st.Nonce)
+		if err := rg.CheckBet(ctx, tx, pid, req.Amount, "dice:bet:"+roundID); err != nil {
+			return err
+		}
 		real, bonus, _, err := s.Wallet.Bet(ctx, tx, pid, req.Amount, "dice:bet:"+roundID, map[string]any{"round_id": roundID, "game_id": gid})
 		if errors.Is(err, wallet.ErrInsufficientFunds) {
 			return httpx.Err(402, "insufficient_funds", "insufficient funds")

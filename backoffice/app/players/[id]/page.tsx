@@ -6,6 +6,8 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import ActionModal from "@/components/ActionModal";
 import { Badge, StatusBadge, VerificationBadge } from "@/components/Badge";
 import AuditDiff from "@/components/AuditDiff";
+import KycTab from "@/components/KycTab";
+import RgTab from "@/components/RgTab";
 import Tile from "@/components/Tile";
 import { api, errMsg } from "@/lib/api";
 import {
@@ -24,12 +26,14 @@ import {
 } from "@/lib/format";
 import type { AuditEntry, BoBonus, Items, LedgerTx, Payment, PlayerBonus, PlayerCard, Round } from "@/lib/types";
 
-type Tab = "rounds" | "payments" | "transactions" | "bonuses" | "audit";
+type Tab = "rounds" | "payments" | "transactions" | "bonuses" | "rg" | "kyc" | "audit";
 const TABS: { key: Tab; label: string }[] = [
   { key: "rounds", label: "Ставки" },
   { key: "payments", label: "Платежи" },
   { key: "transactions", label: "Транзакции" },
   { key: "bonuses", label: "Бонусы" },
+  { key: "rg", label: "Ответственная игра" },
+  { key: "kyc", label: "Верификация (KYC)" },
   { key: "audit", label: "Аудит" },
 ];
 
@@ -65,6 +69,12 @@ export default function PlayerPage() {
   useEffect(() => {
     loadCard();
   }, [loadCard]);
+
+  // Deep links from other pages, e.g. the KYC queue: /players/{id}?tab=kyc
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("tab");
+    if (t && TABS.some((x) => x.key === t)) setTab(t as Tab);
+  }, []);
 
   function refreshAll(msg: string) {
     setNotice(msg);
@@ -268,6 +278,8 @@ export default function PlayerPage() {
             onCancel={(pb) => setAction({ kind: "cancel_bonus", pb })}
           />
         )}
+        {tab === "rg" && <RgTab id={id} reloadKey={reloadKey} onChanged={refreshAll} />}
+        {tab === "kyc" && <KycTab id={id} reloadKey={reloadKey} onChanged={refreshAll} />}
         {tab === "audit" && <AuditTab id={id} reloadKey={reloadKey} />}
       </div>
 
