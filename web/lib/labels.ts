@@ -8,7 +8,7 @@ export const txText: Record<string, string> = {
 };
 
 export const paymentStatusText: Record<string, string> = {
-  pending: "Processing", confirming: "Confirming", completed: "Credited", failed: "Failed",
+  pending: "Processing", confirming: "Confirming", partially_paid: "Partially paid", completed: "Credited", failed: "Failed",
   approved: "Paid out", rejected: "Rejected", frozen: "Under review",
 };
 

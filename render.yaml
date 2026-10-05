@@ -46,6 +46,14 @@ services:
         generateValue: true
       - key: ADMIN_PASSWORD
         sync: false   # Render asks for it when the Blueprint is created
+      # NOWPayments crypto gateway (sandbox by default). The "Crypto (NOWPayments)" deposit
+      # method appears once the API key is set. Keys come from account-sandbox.nowpayments.io.
+      - key: NOWPAYMENTS_API_KEY
+        sync: false
+      - key: NOWPAYMENTS_IPN_SECRET
+        sync: false
+      - key: NOWPAYMENTS_API_URL
+        value: https://api-sandbox.nowpayments.io
 
   - type: web
     name: a2casino-mb-web

@@ -5,7 +5,7 @@ import { api, ApiError, money } from "@/lib/api";
 import { paymentStatusText as statusText, txText } from "@/lib/labels";
 import { balanceChanged, useMe } from "@/lib/useMe";
 
-type Method = { code: string; title: string; kind: "fiat" | "crypto"; network?: string; min_cents: number };
+type Method = { code: string; title: string; kind: "fiat" | "crypto" | "gateway"; network?: string; min_cents: number };
 type Payment = { id: string; direction: string; method: string; amount: number; status: string; address: string | null; created_at: string };
 type Tx = { id: string; type: string; amount: number; created_at: string };
 type Address = { network: string; address: string; min_cents: number; note: string };
@@ -38,7 +38,7 @@ export default function Wallet() {
     if (!me) return;
     reload();
     const p = new URLSearchParams(window.location.search).get("deposit");
-    if (p) setMsg(p === "success" ? "Deposit credited" : "Payment failed");
+    if (p) setMsg({ success: "Deposit credited", processing: "Payment received. Your balance is credited once the network confirms it, usually within a few minutes.", cancelled: "Payment cancelled" }[p] ?? "Payment failed");
   }, [me?.id]);
 
   const m = methods.find((x) => x.code === method);
@@ -84,12 +84,12 @@ export default function Wallet() {
         <div className="panel">
           <div className="tabs">
             <button className={"tab " + (tab === "deposit" ? "active" : "")} onClick={() => { setTab("deposit"); setCrypto(null); }}>Deposit</button>
-            <button className={"tab " + (tab === "withdraw" ? "active" : "")} onClick={() => { setTab("withdraw"); setCrypto(null); }}>Withdraw</button>
+            <button className={"tab " + (tab === "withdraw" ? "active" : "")} onClick={() => { setTab("withdraw"); setCrypto(null); if (m?.kind === "gateway") setMethod(methods.find((x) => x.kind !== "gateway")?.code ?? ""); }}>Withdraw</button>
           </div>
           <div className="form">
             <label>Method
               <select value={method} onChange={(e) => { setMethod(e.target.value); setCrypto(null); }}>
-                {methods.map((x) => <option key={x.code} value={x.code}>{x.title}</option>)}
+                {methods.filter((x) => tab === "deposit" || x.kind !== "gateway").map((x) => <option key={x.code} value={x.code}>{x.title}</option>)}
               </select>
             </label>
             <label>Amount, $<input type="number" min="1" step="1" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>

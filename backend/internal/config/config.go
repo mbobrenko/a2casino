@@ -16,6 +16,9 @@ type Config struct {
 	MockProviderSecret  string
 	PSPWebhookSecret    string
 	CryptoWebhookSecret string
+	NOWPaymentsAPIKey   string // NOWPayments gateway; the method is offered only when set
+	NOWPaymentsIPNKey   string
+	NOWPaymentsBaseURL  string
 	BlockedCountries    map[string]bool
 	CryptoConfirmations int
 	AdminEmail          string
@@ -36,6 +39,9 @@ func Load() Config {
 		MockProviderSecret:  env("MOCK_PROVIDER_SECRET", "mock-provider-secret"),
 		PSPWebhookSecret:    env("PSP_WEBHOOK_SECRET", "mock-psp-secret"),
 		CryptoWebhookSecret: env("CRYPTO_WEBHOOK_SECRET", "mock-crypto-secret"),
+		NOWPaymentsAPIKey:   env("NOWPAYMENTS_API_KEY", ""),
+		NOWPaymentsIPNKey:   env("NOWPAYMENTS_IPN_SECRET", ""),
+		NOWPaymentsBaseURL:  env("NOWPAYMENTS_API_URL", "https://api-sandbox.nowpayments.io"),
 		BlockedCountries:    map[string]bool{},
 		AdminEmail:          env("ADMIN_EMAIL", "admin@a2casino.local"),
 		AdminPassword:       env("ADMIN_PASSWORD", "admin12345"),

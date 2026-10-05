@@ -76,6 +76,12 @@ Signed with `X-Signature: hex(HMAC-SHA256(secret, body))`. Body `{token, round_i
 
 ## Payment webhooks
 
+`POST /api/webhooks/nowpayments`: NOWPayments IPN, signed with `x-nowpayments-sig` = hex(HMAC-SHA512(IPN secret, body with keys sorted)).
+Deposits with method `nowpayments` create a hosted invoice and return `{type: "redirect", url}`; only `payment_status: finished`
+credits the balance, `partially_paid` is left for staff. The method is listed only when `NOWPAYMENTS_API_KEY` is set
+(`NOWPAYMENTS_API_URL` defaults to the sandbox). Deposits only.
+
+
 `POST /api/webhooks/mockpsp` `{payment_id, status: success/failed, psp_ref}` and
 `POST /api/webhooks/mockcrypto` `{network, address, tx_hash, amount_usd_cents, crypto_amount, confirmations, risk}`, both HMAC-signed.
 A crypto deposit is credited once `confirmations >= CRYPTO_CONFIRMATIONS`; `risk: "high"` freezes it and blocks withdrawals.

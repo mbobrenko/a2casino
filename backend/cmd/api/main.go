@@ -132,6 +132,7 @@ func Router(cfg config.Config, w *wallet.Wallet, issuer *auth.Issuer) http.Handl
 		r.Post("/provider/mock/rollback", h(gm.CBRollback))
 		r.Post("/webhooks/mockpsp", h(pay.PSPWebhook))
 		r.Post("/webhooks/mockcrypto", h(pay.CryptoWebhook))
+		r.Post("/webhooks/nowpayments", h(pay.NOWPaymentsIPN))
 
 		r.Route("/bo", func(r chi.Router) {
 			r.With(limited).Post("/login", h(bo.Login))

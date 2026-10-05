@@ -30,7 +30,7 @@ import (
 type Method struct {
 	Code     string `json:"code"`
 	Title    string `json:"title"`
-	Kind     string `json:"kind"` // fiat | crypto
+	Kind     string `json:"kind"` // fiat | crypto | gateway (hosted page, deposits only)
 	Provider string `json:"provider"`
 	Network  string `json:"network,omitempty"`
 	MinCents int64  `json:"min_cents"`
@@ -43,8 +43,21 @@ var Methods = []Method{
 	{Code: "btc", Title: "Bitcoin", Kind: "crypto", Provider: "mockcrypto", Network: "BTC", MinCents: 1000},
 }
 
-func methodBy(code string) (Method, bool) {
-	for _, m := range Methods {
+// methods is the list shown to players: the mock connectors in dev, plus real
+// gateways whose keys are configured.
+func (s *Service) methods() []Method {
+	list := []Method{}
+	if s.Cfg.DevTools {
+		list = append(list, Methods...)
+	}
+	if s.Cfg.NOWPaymentsAPIKey != "" {
+		list = append(list, nowPaymentsMethod)
+	}
+	return list
+}
+
+func (s *Service) methodBy(code string) (Method, bool) {
+	for _, m := range s.methods() {
 		if m.Code == code {
 			return m, true
 		}
@@ -65,7 +78,7 @@ func sign(secret string, body []byte) string {
 }
 
 func (s *Service) ListMethods(w http.ResponseWriter, r *http.Request) error {
-	httpx.JSON(w, 200, map[string]any{"methods": Methods})
+	httpx.JSON(w, 200, map[string]any{"methods": s.methods()})
 	return nil
 }
 
@@ -80,11 +93,14 @@ func (s *Service) Deposit(w http.ResponseWriter, r *http.Request) error {
 	if err := httpx.Decode(r, &req); err != nil {
 		return err
 	}
-	m, ok := methodBy(req.Method)
+	m, ok := s.methodBy(req.Method)
 	if !ok {
 		return httpx.Err(400, "unknown_method", "unknown payment method")
 	}
 	ctx := r.Context()
+	if m.Provider == "nowpayments" {
+		return s.nowPaymentsDeposit(w, r, pid, m, req.Amount)
+	}
 	if m.Kind == "crypto" {
 		// Crypto: each player has a permanent deposit address per network; the deposit
 		// itself is created when the processor reports an incoming transaction.
@@ -133,9 +149,12 @@ func (s *Service) Withdraw(w http.ResponseWriter, r *http.Request) error {
 	if err := httpx.Decode(r, &req); err != nil {
 		return err
 	}
-	m, ok := methodBy(req.Method)
+	m, ok := s.methodBy(req.Method)
 	if !ok {
 		return httpx.Err(400, "unknown_method", "unknown payment method")
+	}
+	if m.Kind == "gateway" {
+		return httpx.Err(400, "deposit_only", "this method is for deposits only")
 	}
 	if req.Amount < 1000 {
 		return httpx.Err(400, "amount_too_small", "minimum withdrawal is $10.00")
