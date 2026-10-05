@@ -34,11 +34,11 @@ export default function BannerCarousel({ banners }: { banners: Banner[] }) {
       </div>
       {n > 1 && (
         <>
-          <button className="car-arrow prev" aria-label="Назад" onClick={() => go(-1)}>‹</button>
-          <button className="car-arrow next" aria-label="Вперёд" onClick={() => go(1)}>›</button>
+          <button className="car-arrow prev" aria-label="Previous" onClick={() => go(-1)}>‹</button>
+          <button className="car-arrow next" aria-label="Next" onClick={() => go(1)}>›</button>
           <div className="dots">
             {banners.map((b, k) => (
-              <button key={b.id} aria-label={`Баннер ${k + 1}`} className={"dot" + (k === i ? " active" : "")} onClick={() => setI(k)} />
+              <button key={b.id} aria-label={`Banner ${k + 1}`} className={"dot" + (k === i ? " active" : "")} onClick={() => setI(k)} />
             ))}
           </div>
         </>

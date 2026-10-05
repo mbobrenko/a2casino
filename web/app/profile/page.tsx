@@ -18,13 +18,13 @@ type Tx = { id: string; type: string; amount: number; created_at: string };
 type Payment = { id: string; direction: string; method: string; amount: number; status: string; created_at: string };
 
 const countryNames: Record<string, string> = {
-  CL: "Чили", MX: "Мексика", GT: "Гватемала", HN: "Гондурас", SV: "Сальвадор",
-  NI: "Никарагуа", BO: "Боливия", CR: "Коста-Рика", PA: "Панама", BR: "Бразилия",
+  CL: "Chile", MX: "Mexico", GT: "Guatemala", HN: "Honduras", SV: "El Salvador",
+  NI: "Nicaragua", BO: "Bolivia", CR: "Costa Rica", PA: "Panama", BR: "Brazil",
 };
 const verificationText: Record<string, string> = {
-  new: "не пройдена", not_verified: "не пройдена", manual_review: "на проверке", duplicate: "дубликат аккаунта", verified: "пройдена",
+  new: "Not verified", not_verified: "Not verified", manual_review: "Under review", duplicate: "Duplicate account", verified: "Verified",
 };
-const providerText: Record<string, string> = { originals: "A2 Originals", mock: "Провайдер", freespins: "Фриспины" };
+const providerText: Record<string, string> = { originals: "A2 Originals", mock: "Provider", freespins: "Free spins" };
 
 type Tab = "rounds" | "tx" | "payments";
 
@@ -49,67 +49,67 @@ export default function ProfilePage() {
     api<{ items: Payment[] }>("/api/payments").then((r) => setPayments(r.items)).catch(() => setPayments([]));
   }, [me?.id, me?.balance.real, me?.balance.bonus]);
 
-  if (ready && !me) return <div className="panel"><h2>Войдите, чтобы открыть профиль</h2><Link className="btn" href="/login">Войти</Link></div>;
+  if (ready && !me) return <div className="panel"><h2>Log in to view your profile</h2><Link className="btn" href="/login">Log in</Link></div>;
   if (!me || !p) return error ? <p className="error">{error}</p> : null;
 
   const lvl = levels.find((l) => l.level === p.vip.level);
   const s = p.stats;
   const tiles: [string, string][] = [
-    ["Ставок", s.bets.toLocaleString("ru-RU")],
-    ["Сумма ставок", money(s.bet_sum)],
-    ["Выигрышей", s.wins.toLocaleString("ru-RU")],
-    ["Сумма выигрышей", money(s.win_sum)],
-    ["Депозитов", s.deposits.toLocaleString("ru-RU")],
-    ["Сумма депозитов", money(s.deposit_sum)],
-    ["Выводов", s.withdrawals.toLocaleString("ru-RU")],
-    ["Сумма выводов", money(s.withdrawal_sum)],
+    ["Bets", s.bets.toLocaleString("en-US")],
+    ["Total wagered", money(s.bet_sum)],
+    ["Wins", s.wins.toLocaleString("en-US")],
+    ["Total won", money(s.win_sum)],
+    ["Deposits", s.deposits.toLocaleString("en-US")],
+    ["Total deposited", money(s.deposit_sum)],
+    ["Withdrawals", s.withdrawals.toLocaleString("en-US")],
+    ["Total withdrawn", money(s.withdrawal_sum)],
   ];
 
   return (
     <>
-      <h1>Профиль</h1>
+      <h1>Profile</h1>
       <div className="cols">
         <div className="panel">
-          <h2>Аккаунт</h2>
+          <h2>Account</h2>
           <div className="kv">
             <div><span className="muted">Email</span><b className="ellipsis">{p.email}</b></div>
-            <div><span className="muted">Страна</span><b>{countryNames[p.country] ?? p.country}</b></div>
-            <div><span className="muted">Верификация</span>
+            <div><span className="muted">Country</span><b>{countryNames[p.country] ?? p.country}</b></div>
+            <div><span className="muted">Verification</span>
               <b className={p.verification === "verified" ? "win" : ""}>{verificationText[p.verification] ?? p.verification}</b></div>
-            <div><span className="muted">Дата регистрации</span><b>{fmtDate(p.created_at)}</b></div>
-            <div><span className="muted">VIP-уровень</span>
-              <b><Link href="/vip">{levelIcon[p.vip.level - 1] ?? "⭐"} {lvl?.name ?? p.vip.level} · {p.vip.points.toLocaleString("ru-RU")} очков</Link></b></div>
+            <div><span className="muted">Member since</span><b>{fmtDate(p.created_at)}</b></div>
+            <div><span className="muted">VIP level</span>
+              <b><Link href="/vip">{levelIcon[p.vip.level - 1] ?? "⭐"} {lvl?.name ?? p.vip.level} · {p.vip.points.toLocaleString("en-US")} points</Link></b></div>
           </div>
         </div>
         <div className="panel">
-          <h2>Баланс</h2>
+          <h2>Balance</h2>
           <div className="kv">
-            <div><span className="muted">Реальный</span><b>{money(p.balance.real)}</b></div>
-            <div><span className="muted">Бонусный</span><b>{money(p.balance.bonus)}</b></div>
-            <div><span className="muted">В ожидании вывода</span><b>{money(p.balance.locked)}</b></div>
+            <div><span className="muted">Real</span><b>{money(p.balance.real)}</b></div>
+            <div><span className="muted">Bonus</span><b>{money(p.balance.bonus)}</b></div>
+            <div><span className="muted">Pending withdrawal</span><b>{money(p.balance.locked)}</b></div>
           </div>
           <div className="row" style={{ marginTop: 14 }}>
-            <Link href="/wallet" className="btn gold">Пополнить</Link>
-            <Link href="/promo" className="btn ghost">Мои бонусы</Link>
+            <Link href="/wallet" className="btn gold">Deposit</Link>
+            <Link href="/promo" className="btn ghost">My bonuses</Link>
           </div>
         </div>
       </div>
 
-      <h2 style={{ marginTop: 24 }}>Статистика</h2>
+      <h2 style={{ marginTop: 24 }}>Statistics</h2>
       <div className="tiles stats">
         {tiles.map(([k, v]) => <div key={k} className="tile"><div className="muted">{k}</div><div className="v">{v}</div></div>)}
       </div>
 
       <div className="panel">
         <div className="tabs">
-          <button className={"tab" + (tab === "rounds" ? " active" : "")} onClick={() => setTab("rounds")}>История ставок</button>
-          <button className={"tab" + (tab === "tx" ? " active" : "")} onClick={() => setTab("tx")}>Транзакции</button>
-          <button className={"tab" + (tab === "payments" ? " active" : "")} onClick={() => setTab("payments")}>Платежи</button>
+          <button className={"tab" + (tab === "rounds" ? " active" : "")} onClick={() => setTab("rounds")}>Bet history</button>
+          <button className={"tab" + (tab === "tx" ? " active" : "")} onClick={() => setTab("tx")}>Transactions</button>
+          <button className={"tab" + (tab === "payments" ? " active" : "")} onClick={() => setTab("payments")}>Payments</button>
         </div>
 
-        {tab === "rounds" && (rounds?.length === 0 ? <p className="muted">Ставок пока нет</p> : (
+        {tab === "rounds" && (rounds?.length === 0 ? <p className="muted">No bets yet</p> : (
           <div className="table-wrap"><table>
-            <thead><tr><th>Дата</th><th>Игра</th><th>Ставка</th><th>Выигрыш</th><th className="hide-sm">Статус</th></tr></thead>
+            <thead><tr><th>Date</th><th>Game</th><th>Bet</th><th>Win</th><th className="hide-sm">Status</th></tr></thead>
             <tbody>{rounds?.map((r) => (
               <tr key={r.id}>
                 <td className="nowrap">{fmtShort(r.created_at)}</td>
@@ -122,9 +122,9 @@ export default function ProfilePage() {
           </table></div>
         ))}
 
-        {tab === "tx" && (txs?.length === 0 ? <p className="muted">Операций пока нет</p> : (
+        {tab === "tx" && (txs?.length === 0 ? <p className="muted">No transactions yet</p> : (
           <div className="table-wrap"><table>
-            <thead><tr><th>Дата</th><th>Операция</th><th>Сумма</th></tr></thead>
+            <thead><tr><th>Date</th><th>Transaction</th><th>Amount</th></tr></thead>
             <tbody>{txs?.map((t) => (
               <tr key={t.id}>
                 <td className="nowrap">{fmtShort(t.created_at)}</td>
@@ -135,13 +135,13 @@ export default function ProfilePage() {
           </table></div>
         ))}
 
-        {tab === "payments" && (payments?.length === 0 ? <p className="muted">Платежей пока нет</p> : (
+        {tab === "payments" && (payments?.length === 0 ? <p className="muted">No payments yet</p> : (
           <div className="table-wrap"><table>
-            <thead><tr><th>Дата</th><th>Тип</th><th className="hide-sm">Способ</th><th>Сумма</th><th>Статус</th></tr></thead>
+            <thead><tr><th>Date</th><th>Type</th><th className="hide-sm">Method</th><th>Amount</th><th>Status</th></tr></thead>
             <tbody>{payments?.map((x) => (
               <tr key={x.id}>
                 <td className="nowrap">{fmtShort(x.created_at)}</td>
-                <td>{x.direction === "deposit" ? "Депозит" : "Вывод"}</td>
+                <td>{x.direction === "deposit" ? "Deposit" : "Withdrawal"}</td>
                 <td className="hide-sm">{x.method}</td>
                 <td>{money(x.amount)}</td>
                 <td><span className={"status " + x.status}>{paymentStatusText[x.status] ?? x.status}</span></td>

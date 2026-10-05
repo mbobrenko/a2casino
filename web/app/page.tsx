@@ -67,7 +67,7 @@ export default function LobbyPage() {
       <div className="lobby-bar">
         <div className="tabs scroll">
           <button className={"tab" + (cat === "" ? " active" : "")} onClick={() => setCat("")}>
-            Все <span className="count">{total}</span>
+            All <span className="count">{total}</span>
           </button>
           {lobby?.categories.filter((c) => c.games > 0).map((c) => (
             <button key={c.code} className={"tab" + (cat === c.code ? " active" : "")} onClick={() => setCat(c.code)}>
@@ -75,7 +75,7 @@ export default function LobbyPage() {
             </button>
           ))}
         </div>
-        <input className="search" type="search" placeholder="🔍 Поиск игры" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="search" type="search" placeholder="🔍 Search games" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
 
       {lobby && lobby.providers.length > 0 && (
@@ -93,22 +93,22 @@ export default function LobbyPage() {
 
       {!filtered && lobby && (
         <>
-          {me && row("Недавние игры", lobby.recent, "🕘")}
-          {row("Рекомендуем вам", lobby.recommended, "✨")}
-          {row("Популярное", lobby.popular, "🔥")}
-          {row("Новинки", lobby.new, "🆕")}
+          {me && row("Recently played", lobby.recent, "🕘")}
+          {row("Recommended for you", lobby.recommended, "✨")}
+          {row("Popular", lobby.popular, "🔥")}
+          {row("New releases", lobby.new, "🆕")}
         </>
       )}
 
       <section className="section">
         <div className="section-head">
-          <h2>{filtered ? "Результаты" : "Все игры"}</h2>
+          <h2>{filtered ? "Results" : "All games"}</h2>
           {games && <span className="muted">{games.length}</span>}
           {filtered && (
-            <button className="link-btn" onClick={() => { setCat(""); setStudio(""); setQ(""); }}>Сбросить фильтры</button>
+            <button className="link-btn" onClick={() => { setCat(""); setStudio(""); setQ(""); }}>Clear filters</button>
           )}
         </div>
-        {games && games.length === 0 && <p className="muted">Ничего не найдено. Попробуйте изменить запрос или фильтры.</p>}
+        {games && games.length === 0 && <p className="muted">No games found. Try a different search or filters.</p>}
         <div className="grid">
           {games?.map((g) => <GameTile key={g.id} game={g} studio={studios[g.studio]} />)}
         </div>

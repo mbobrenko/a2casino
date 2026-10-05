@@ -1,28 +1,28 @@
-// Shared Russian labels and API types for the v0.2 player sections.
+// Shared player-facing labels and API types for the v0.2 player sections.
 
 export const txText: Record<string, string> = {
-  deposit: "Депозит", bet: "Ставка", win: "Выигрыш", rollback: "Отмена ставки", adjustment: "Корректировка",
-  withdraw_hold: "Вывод (резерв)", withdraw_release: "Вывод отменён", withdraw_complete: "Вывод выплачен",
-  bonus_grant: "Начисление бонуса", bonus_release: "Бонус отыгран", bonus_forfeit: "Бонус аннулирован",
-  cashback: "Кэшбэк", rakeback: "Рейкбэк",
+  deposit: "Deposit", bet: "Bet", win: "Win", rollback: "Bet voided", adjustment: "Adjustment",
+  withdraw_hold: "Withdrawal (on hold)", withdraw_release: "Withdrawal cancelled", withdraw_complete: "Withdrawal paid",
+  bonus_grant: "Bonus credited", bonus_release: "Bonus wagered", bonus_forfeit: "Bonus forfeited",
+  cashback: "Cashback", rakeback: "Rakeback",
 };
 
 export const paymentStatusText: Record<string, string> = {
-  pending: "в обработке", confirming: "подтверждается", completed: "зачислен", failed: "ошибка",
-  approved: "выплачен", rejected: "отклонён", frozen: "на проверке",
+  pending: "Processing", confirming: "Confirming", completed: "Credited", failed: "Failed",
+  approved: "Paid out", rejected: "Rejected", frozen: "Under review",
 };
 
 export const roundStatusText: Record<string, string> = {
-  open: "в игре", settled: "завершён", rolled_back: "отменён",
+  open: "In play", settled: "Settled", rolled_back: "Voided",
 };
 
 export const bonusStatusText: Record<string, string> = {
-  pending: "Ждёт депозита", active: "Активен", completed: "Отыгран", forfeited: "Сгорел",
-  expired: "Истёк", cancelled: "Отменён",
+  pending: "Awaiting deposit", active: "Active", completed: "Wagered", forfeited: "Forfeited",
+  expired: "Expired", cancelled: "Cancelled",
 };
 
 export const tagText: Record<string, string> = {
-  popular: "Хит", jackpot: "Джекпот", "provably-fair": "Честная игра", hot: "Горячая", exclusive: "Эксклюзив",
+  popular: "Hot", jackpot: "Jackpot", "provably-fair": "Provably fair", hot: "Trending", exclusive: "Exclusive",
 };
 
 export type BonusOffer = {

@@ -4,16 +4,16 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "A2Casino",
-  description: "A2Casino — слоты, настольные игры и кости",
+  description: "A2Casino — slots, table games and dice",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ru">
+    <html lang="en">
       <body>
         <Header />
         <main className="container">{children}</main>
-        <footer className="footer">18+ · Играйте ответственно · Тестовая версия, все платежи и игры имитированы</footer>
+        <footer className="footer">18+ · Play responsibly · Demo version: all payments and games are simulated</footer>
       </body>
     </html>
   );

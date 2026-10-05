@@ -48,23 +48,23 @@ export default function Dice() {
           {result ? result.roll.toFixed(2) : "—"}
         </div>
         <p className="muted" style={{ textAlign: "center" }}>
-          {result ? (result.win > 0 ? `Выигрыш ${money(result.win)}` : "Не повезло") : "Выигрыш, если выпадет меньше цели"}
+          {result ? (result.win > 0 ? `You won ${money(result.win)}` : "No luck this time") : "Win if the roll is under the target"}
         </p>
-        <label>Цель: меньше {target}
+        <label>Target: under {target}
           <input type="range" min={2} max={98} value={target} onChange={(e) => setTarget(Number(e.target.value))} />
         </label>
         <div className="tiles" style={{ marginTop: 12 }}>
-          <div className="tile"><div className="muted">Шанс</div><div className="v">{target}%</div></div>
-          <div className="tile"><div className="muted">Множитель</div><div className="v">x{multiplier.toFixed(4)}</div></div>
+          <div className="tile"><div className="muted">Win chance</div><div className="v">{target}%</div></div>
+          <div className="tile"><div className="muted">Multiplier</div><div className="v">x{multiplier.toFixed(4)}</div></div>
         </div>
         <div className="row">
-          <label style={{ flex: 1 }}>Ставка, $<input type="number" min="0.1" step="0.1" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
-          <button className="btn gold" onClick={roll} disabled={busy}>Бросить</button>
+          <label style={{ flex: 1 }}>Bet, $<input type="number" min="0.1" step="0.1" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
+          <button className="btn gold" onClick={roll} disabled={busy}>Roll</button>
         </div>
         {error && <p className="error">{error}</p>}
         {history.length > 0 && (
           <table style={{ marginTop: 16 }}>
-            <thead><tr><th>#</th><th>Результат</th><th>Цель</th><th>Выигрыш</th></tr></thead>
+            <thead><tr><th>#</th><th>Roll</th><th>Target</th><th>Payout</th></tr></thead>
             <tbody>{history.map((h) => (
               <tr key={h.nonce}><td>{h.nonce}</td><td className={h.win > 0 ? "win" : "lose"}>{h.roll.toFixed(2)}</td><td>&lt; {h.target}</td><td>{money(h.win)}</td></tr>
             ))}</tbody>
@@ -72,16 +72,16 @@ export default function Dice() {
         )}
       </div>
       <div className="panel">
-        <h2>Доказуемая честность</h2>
-        <p className="muted">Результат = HMAC-SHA256(server seed, &quot;client seed:nonce&quot;). Хэш server seed показан до ставки; сам seed раскрывается при смене.</p>
+        <h2>Provably fair</h2>
+        <p className="muted">Result = HMAC-SHA256(server seed, &quot;client seed:nonce&quot;). The server seed hash is shown before you bet; the seed itself is revealed when you rotate it.</p>
         {seed && (
           <>
-            <label>Хэш server seed<div className="mono">{seed.server_seed_hash}</div></label>
+            <label>Server seed hash<div className="mono">{seed.server_seed_hash}</div></label>
             <p className="muted">Nonce: {seed.nonce}</p>
             <label>Client seed<input value={clientSeed} onChange={(e) => setClientSeed(e.target.value)} /></label>
-            <button className="btn ghost" style={{ marginTop: 10 }} onClick={rotate}>Сменить seed</button>
+            <button className="btn ghost" style={{ marginTop: 10 }} onClick={rotate}>Rotate seed</button>
             {seed.previous_server_seed && (
-              <label style={{ marginTop: 12 }}>Предыдущий server seed (для проверки)<div className="mono">{seed.previous_server_seed}</div></label>
+              <label style={{ marginTop: 12 }}>Previous server seed (for verification)<div className="mono">{seed.previous_server_seed}</div></label>
             )}
           </>
         )}

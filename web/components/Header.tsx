@@ -5,7 +5,7 @@ import { setToken, money } from "@/lib/api";
 import { useMe } from "@/lib/useMe";
 
 const links = [
-  ["/", "Лобби"], ["/promo", "Промо"], ["/vip", "VIP"], ["/wallet", "Кошелёк"], ["/profile", "Профиль"],
+  ["/", "Lobby"], ["/promo", "Promotions"], ["/vip", "VIP"], ["/wallet", "Wallet"], ["/profile", "Profile"],
 ];
 
 export default function Header() {
@@ -23,17 +23,17 @@ export default function Header() {
       <div className="header-right">
         {ready && me && (
           <>
-            <Link href="/wallet" className="balance-pill" title="Реальный баланс + бонусный">
+            <Link href="/wallet" className="balance-pill" title="Real balance + bonus balance">
               {money(me.balance.real)}
-              {me.balance.bonus > 0 && <small> + {money(me.balance.bonus)} бонус</small>}
+              {me.balance.bonus > 0 && <small> + {money(me.balance.bonus)} bonus</small>}
             </Link>
-            <button className="btn ghost" onClick={() => setToken(null)}>Выйти</button>
+            <button className="btn ghost" onClick={() => setToken(null)}>Log out</button>
           </>
         )}
         {ready && !me && (
           <>
-            <Link href="/login" className="btn ghost">Войти</Link>
-            <Link href="/register" className="btn">Регистрация</Link>
+            <Link href="/login" className="btn ghost">Log in</Link>
+            <Link href="/register" className="btn">Sign up</Link>
           </>
         )}
       </div>

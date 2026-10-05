@@ -27,11 +27,11 @@ export default function GamePage() {
   }, []);
 
   if (ready && !me) {
-    return <div className="panel"><h2>Войдите, чтобы играть</h2><Link className="btn" href="/login">Войти</Link></div>;
+    return <div className="panel"><h2>Log in to play</h2><Link className="btn" href="/login">Log in</Link></div>;
   }
   return (
     <>
-      <h1>{launch?.game.title ?? "Загрузка…"}</h1>
+      <h1>{launch?.game.title ?? "Loading…"}</h1>
       {error && <p className="error">{error}</p>}
       {launch?.type === "iframe" && <iframe className="frame" src={launch.url} title={launch.game.title} />}
       {launch?.type === "originals" && <Dice />}

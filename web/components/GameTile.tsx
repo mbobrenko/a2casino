@@ -9,7 +9,7 @@ export default function GameTile({ game, studio }: { game: Game; studio?: string
   return (
     <Link href={`/game/${game.slug}`} className="game" title={game.title}>
       <div className="badges">
-        {game.is_new && <span className="gbadge new">Новинка</span>}
+        {game.is_new && <span className="gbadge new">New</span>}
         {badges.map((t) => <span key={t} className={"gbadge " + t}>{tagText[t]}</span>)}
       </div>
       <div className="art" style={{ background: `linear-gradient(135deg, ${color}, color-mix(in srgb, ${color} 35%, #0f0d1a))` }}>

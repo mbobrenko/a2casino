@@ -27,13 +27,13 @@ export default function Login() {
 
   return (
     <div className="panel" style={{ maxWidth: 440, margin: "40px auto" }}>
-      <h1>Вход</h1>
+      <h1>Log in</h1>
       <form className="form" onSubmit={submit}>
         <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
-        <label>Пароль<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
+        <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
         {error && <div className="error">{error}</div>}
-        <button className="btn" disabled={busy}>Войти</button>
-        <div className="muted">Нет аккаунта? <Link href="/register" style={{ color: "var(--accent-2)" }}>Регистрация</Link></div>
+        <button className="btn" disabled={busy}>Log in</button>
+        <div className="muted">No account yet? <Link href="/register" style={{ color: "var(--accent-2)" }}>Sign up</Link></div>
       </form>
     </div>
   );

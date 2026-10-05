@@ -5,8 +5,8 @@ import { api, setToken } from "@/lib/api";
 
 // Phase-1 markets from the architecture doc, plus Brazil to show the geo block.
 const countries = [
-  ["CL", "Чили"], ["MX", "Мексика"], ["GT", "Гватемала"], ["HN", "Гондурас"], ["SV", "Сальвадор"],
-  ["NI", "Никарагуа"], ["BO", "Боливия"], ["CR", "Коста-Рика"], ["PA", "Панама"], ["BR", "Бразилия (заблокирована)"],
+  ["CL", "Chile"], ["MX", "Mexico"], ["GT", "Guatemala"], ["HN", "Honduras"], ["SV", "El Salvador"],
+  ["NI", "Nicaragua"], ["BO", "Bolivia"], ["CR", "Costa Rica"], ["PA", "Panama"], ["BR", "Brazil (blocked)"],
 ];
 
 export default function Register() {
@@ -34,21 +34,21 @@ export default function Register() {
 
   return (
     <div className="panel" style={{ maxWidth: 440, margin: "40px auto" }}>
-      <h1>Регистрация</h1>
+      <h1>Sign up</h1>
       <form className="form" onSubmit={submit}>
         <label>Email<input type="email" value={form.email} onChange={set("email")} required /></label>
-        <label>Пароль<input type="password" minLength={8} value={form.password} onChange={set("password")} required /></label>
-        <label>Страна<select value={form.country} onChange={set("country")}>
+        <label>Password<input type="password" minLength={8} value={form.password} onChange={set("password")} required /></label>
+        <label>Country<select value={form.country} onChange={set("country")}>
           {countries.map(([c, n]) => <option key={c} value={c}>{n}</option>)}
         </select></label>
-        <label>Дата рождения<input type="date" value={form.birth_date} onChange={set("birth_date")} required /></label>
-        <label>Промокод или ref (необязательно)<input value={form.ref} onChange={set("ref")} /></label>
+        <label>Date of birth<input type="date" value={form.birth_date} onChange={set("birth_date")} required /></label>
+        <label>Promo code or referral (optional)<input value={form.ref} onChange={set("ref")} /></label>
         <label style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
-          Мне есть 18 лет, я принимаю правила
+          I am 18 or older and accept the terms
         </label>
         {error && <div className="error">{error}</div>}
-        <button className="btn" disabled={busy || !agree}>Создать аккаунт</button>
+        <button className="btn" disabled={busy || !agree}>Create account</button>
       </form>
     </div>
   );

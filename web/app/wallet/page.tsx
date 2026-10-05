@@ -11,7 +11,7 @@ type Tx = { id: string; type: string; amount: number; created_at: string };
 type Address = { network: string; address: string; min_cents: number; note: string };
 
 const cents = (s: string) => Math.round(parseFloat(s || "0") * 100);
-const date = (s: string) => new Date(s).toLocaleString("ru-RU");
+const date = (s: string) => new Date(s).toLocaleString("en-US");
 
 export default function Wallet() {
   const { me, ready } = useMe();
@@ -38,7 +38,7 @@ export default function Wallet() {
     if (!me) return;
     reload();
     const p = new URLSearchParams(window.location.search).get("deposit");
-    if (p) setMsg(p === "success" ? "Депозит зачислен" : "Оплата не прошла");
+    if (p) setMsg(p === "success" ? "Deposit credited" : "Payment failed");
   }, [me?.id]);
 
   const m = methods.find((x) => x.code === method);
@@ -57,76 +57,76 @@ export default function Wallet() {
   });
   const simulate = (risk?: string) => run(async () => {
     const r = await api("/api/dev/crypto/simulate", { method, amount_usd_cents: cents(amount), risk });
-    setMsg(r.final_status === "frozen" ? "Транзакция отправлена на AML-проверку" : "Крипто-депозит зачислен");
+    setMsg(r.final_status === "frozen" ? "Transaction sent for AML review" : "Crypto deposit credited");
     reload();
   });
   const withdraw = () => run(async () => {
     await api("/api/payments/withdraw", { method, amount: cents(amount), address });
-    setMsg("Заявка на вывод создана и ждёт одобрения");
+    setMsg("Withdrawal requested and awaiting approval");
     reload();
   });
 
-  if (ready && !me) return <div className="panel"><h2>Войдите, чтобы открыть кошелёк</h2><Link className="btn" href="/login">Войти</Link></div>;
+  if (ready && !me) return <div className="panel"><h2>Log in to open your wallet</h2><Link className="btn" href="/login">Log in</Link></div>;
   if (!me) return null;
   const b = me.balance;
 
   return (
     <>
-      <h1>Кошелёк</h1>
+      <h1>Wallet</h1>
       <div className="tiles">
-        <div className="tile"><div className="muted">Реальный баланс</div><div className="v">{money(b.real)}</div></div>
-        <div className="tile"><div className="muted">Бонусный</div><div className="v">{money(b.bonus)}</div></div>
-        <div className="tile"><div className="muted">В ожидании вывода</div><div className="v">{money(b.locked)}</div></div>
-        <div className="tile"><div className="muted">Верификация</div><div className="v">{me.verification === "verified" ? "пройдена" : "не пройдена"}</div></div>
+        <div className="tile"><div className="muted">Real balance</div><div className="v">{money(b.real)}</div></div>
+        <div className="tile"><div className="muted">Bonus balance</div><div className="v">{money(b.bonus)}</div></div>
+        <div className="tile"><div className="muted">Pending withdrawal</div><div className="v">{money(b.locked)}</div></div>
+        <div className="tile"><div className="muted">Verification</div><div className="v">{me.verification === "verified" ? "Verified" : "Not verified"}</div></div>
       </div>
 
       <div className="cols" style={{ marginTop: 20 }}>
         <div className="panel">
           <div className="tabs">
-            <button className={"tab " + (tab === "deposit" ? "active" : "")} onClick={() => { setTab("deposit"); setCrypto(null); }}>Пополнить</button>
-            <button className={"tab " + (tab === "withdraw" ? "active" : "")} onClick={() => { setTab("withdraw"); setCrypto(null); }}>Вывести</button>
+            <button className={"tab " + (tab === "deposit" ? "active" : "")} onClick={() => { setTab("deposit"); setCrypto(null); }}>Deposit</button>
+            <button className={"tab " + (tab === "withdraw" ? "active" : "")} onClick={() => { setTab("withdraw"); setCrypto(null); }}>Withdraw</button>
           </div>
           <div className="form">
-            <label>Способ
+            <label>Method
               <select value={method} onChange={(e) => { setMethod(e.target.value); setCrypto(null); }}>
                 {methods.map((x) => <option key={x.code} value={x.code}>{x.title}</option>)}
               </select>
             </label>
-            <label>Сумма, $<input type="number" min="1" step="1" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
-            {m && <p className="muted">Минимум {money(tab === "deposit" ? m.min_cents : 1000)}</p>}
+            <label>Amount, $<input type="number" min="1" step="1" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
+            {m && <p className="muted">Minimum {money(tab === "deposit" ? m.min_cents : 1000)}</p>}
             {tab === "withdraw" && m?.kind === "crypto" && (
-              <label>Адрес кошелька ({m.network})<input value={address} onChange={(e) => setAddress(e.target.value)} /></label>
+              <label>Wallet address ({m.network})<input value={address} onChange={(e) => setAddress(e.target.value)} /></label>
             )}
             {tab === "deposit"
-              ? <button className="btn gold" onClick={deposit}>{m?.kind === "crypto" ? "Показать адрес" : "Перейти к оплате"}</button>
-              : <button className="btn gold" onClick={withdraw}>Заказать вывод</button>}
-            {tab === "withdraw" && me.verification !== "verified" && <p className="muted">Вывод доступен после верификации (KYC).</p>}
+              ? <button className="btn gold" onClick={deposit}>{m?.kind === "crypto" ? "Show address" : "Proceed to payment"}</button>
+              : <button className="btn gold" onClick={withdraw}>Request withdrawal</button>}
+            {tab === "withdraw" && me.verification !== "verified" && <p className="muted">Withdrawals are available after verification (KYC).</p>}
           </div>
           {crypto && (
             <div style={{ marginTop: 16 }}>
-              <p className="muted">Адрес для пополнения ({crypto.network}):</p>
+              <p className="muted">Deposit address ({crypto.network}):</p>
               <div className="mono">{crypto.address}</div>
               <p className="muted">{crypto.note}</p>
               <div className="row">
-                <button className="btn ghost" onClick={() => simulate()}>Симулировать перевод (тест)</button>
-                <button className="btn ghost" onClick={() => simulate("high")}>Рисковый перевод (тест AML)</button>
+                <button className="btn ghost" onClick={() => simulate()}>Simulate transfer (test)</button>
+                <button className="btn ghost" onClick={() => simulate("high")}>Risky transfer (AML test)</button>
               </div>
             </div>
           )}
           {msg && <p className="ok">{msg}</p>}
           {error && <p className="error">{error}</p>}
           {bonusBlock && (
-            <p className="error">Сначала отыграйте или отмените активный бонус. <Link href="/promo" style={{ color: "var(--accent-2)", textDecoration: "underline" }}>Перейти в «Промо»</Link></p>
+            <p className="error">Wager or cancel your active bonus first. <Link href="/promo" style={{ color: "var(--accent-2)", textDecoration: "underline" }}>Go to Promotions</Link></p>
           )}
         </div>
 
         <div className="panel">
-          <h2>Платежи</h2>
-          {payments.length === 0 ? <p className="muted">Пока пусто</p> : (
+          <h2>Payments</h2>
+          {payments.length === 0 ? <p className="muted">Nothing here yet</p> : (
             <div className="table-wrap"><table>
-              <thead><tr><th>Дата</th><th>Тип</th><th>Способ</th><th>Сумма</th><th>Статус</th></tr></thead>
+              <thead><tr><th>Date</th><th>Type</th><th>Method</th><th>Amount</th><th>Status</th></tr></thead>
               <tbody>{payments.map((p) => (
-                <tr key={p.id}><td>{date(p.created_at)}</td><td>{p.direction === "deposit" ? "Депозит" : "Вывод"}</td><td>{p.method}</td>
+                <tr key={p.id}><td>{date(p.created_at)}</td><td>{p.direction === "deposit" ? "Deposit" : "Withdrawal"}</td><td>{p.method}</td>
                   <td>{money(p.amount)}</td><td><span className={"status " + p.status}>{statusText[p.status] ?? p.status}</span></td></tr>
               ))}</tbody>
             </table></div>
@@ -135,10 +135,10 @@ export default function Wallet() {
       </div>
 
       <div className="panel" style={{ marginTop: 20 }}>
-        <h2>История операций</h2>
-        {txs.length === 0 ? <p className="muted">Пока пусто</p> : (
+        <h2>Transaction history</h2>
+        {txs.length === 0 ? <p className="muted">Nothing here yet</p> : (
           <div className="table-wrap"><table>
-            <thead><tr><th>Дата</th><th>Операция</th><th>Сумма</th></tr></thead>
+            <thead><tr><th>Date</th><th>Transaction</th><th>Amount</th></tr></thead>
             <tbody>{txs.map((t) => (
               <tr key={t.id}><td>{date(t.created_at)}</td><td>{txText[t.type] ?? t.type}</td><td>{money(t.amount)}</td></tr>
             ))}</tbody>

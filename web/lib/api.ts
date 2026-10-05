@@ -33,30 +33,30 @@ export async function api<T = any>(path: string, body?: unknown): Promise<T> {
 }
 
 const messages: Record<string, string> = {
-  country_blocked: "Регистрация недоступна в вашей стране",
-  underage: "Сервис доступен только с 18 лет",
-  email_taken: "Этот email уже зарегистрирован",
-  bad_credentials: "Неверный email или пароль",
-  weak_password: "Пароль должен быть не короче 8 символов",
-  insufficient_funds: "Недостаточно средств",
-  kyc_required: "Для вывода нужно пройти верификацию",
-  withdrawals_blocked: "Выводы для аккаунта недоступны",
-  blocked: "Аккаунт заблокирован, обратитесь в поддержку",
-  rate_limited: "Слишком много попыток, попробуйте позже",
-  bonus_active: "Сначала отыграйте или отмените активный бонус",
-  promo_not_found: "Такого промокода не существует",
-  promo_expired: "Срок действия промокода истёк",
-  already_used: "Вы уже использовали этот бонус",
-  already_claimed: "Этот бонус уже ждёт вашего депозита",
-  bad_code: "Введите промокод",
-  bonus_inactive: "Этот бонус больше недоступен",
-  bonus_finished: "Этот бонус уже завершён",
-  no_freespins: "Фриспины закончились",
-  nothing_to_claim: "Минимум $1",
+  country_blocked: "Registration is not available in your country",
+  underage: "You must be 18 or older to play",
+  email_taken: "This email is already registered",
+  bad_credentials: "Incorrect email or password",
+  weak_password: "Password must be at least 8 characters",
+  insufficient_funds: "Insufficient funds",
+  kyc_required: "Please verify your account to withdraw",
+  withdrawals_blocked: "Withdrawals are disabled for this account",
+  blocked: "Your account is blocked. Please contact support",
+  rate_limited: "Too many attempts. Please try again later",
+  bonus_active: "Wager or cancel your active bonus first",
+  promo_not_found: "This promo code does not exist",
+  promo_expired: "This promo code has expired",
+  already_used: "You have already used this bonus",
+  already_claimed: "This bonus is already awaiting your deposit",
+  bad_code: "Enter a promo code",
+  bonus_inactive: "This bonus is no longer available",
+  bonus_finished: "This bonus has already ended",
+  no_freespins: "No free spins left",
+  nothing_to_claim: "Minimum $1",
 };
 
 function errorText(code?: string, fallback?: string) {
-  return (code && messages[code]) || fallback || "Ошибка запроса";
+  return (code && messages[code]) || fallback || "Request failed";
 }
 
 export const money = (cents: number) =>
@@ -69,6 +69,6 @@ export type Game = {
   studio: string; emoji: string; color: string; tags: string[] | null; description: string;
 };
 
-export const fmtDate = (s: string | null | undefined) => (s ? new Date(s).toLocaleDateString("ru-RU") : "—");
+export const fmtDate = (s: string | null | undefined) => (s ? new Date(s).toLocaleDateString("en-US") : "—");
 export const fmtShort = (s: string) =>
-  new Date(s).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  new Date(s).toLocaleString("en-US", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });

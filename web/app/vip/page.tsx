@@ -28,10 +28,10 @@ export default function Vip() {
     setMsg((m) => ({ ...m, [kind]: undefined }));
     try {
       const r = await api<{ amount: number }>(`/api/vip/claim-${kind}`, {});
-      setMsg((m) => ({ ...m, [kind]: { ok: true, text: `Зачислено ${money(r.amount)} на реальный баланс` } }));
+      setMsg((m) => ({ ...m, [kind]: { ok: true, text: `${money(r.amount)} credited to your real balance` } }));
       reload(); balanceChanged();
     } catch (e: any) {
-      setMsg((m) => ({ ...m, [kind]: { ok: false, text: e.code === "nothing_to_claim" ? "Минимум $1" : e.message } }));
+      setMsg((m) => ({ ...m, [kind]: { ok: false, text: e.code === "nothing_to_claim" ? "Minimum $1" : e.message } }));
     }
     setBusy("");
   }
@@ -45,15 +45,15 @@ export default function Vip() {
   return (
     <>
       <section className="hero vip-hero">
-        <h1>👑 VIP-клуб A2</h1>
-        <div>Каждый $1 реальных ставок — 1 очко. Поднимайтесь по уровням и получайте кэшбэк с проигрышей и рейкбэк с каждой ставки.</div>
+        <h1>👑 A2 VIP Club</h1>
+        <div>Earn 1 point for every $1 wagered with real money. Climb the levels to unlock cashback on losses and rakeback on every bet.</div>
       </section>
       {error && <p className="error">{error}</p>}
 
       {ready && !me && (
         <div className="panel" style={{ marginBottom: 24 }}>
-          <h2>Войдите, чтобы увидеть свой уровень и забрать награды</h2>
-          <Link className="btn" href="/login">Войти</Link>
+          <h2>Log in to see your level and claim rewards</h2>
+          <Link className="btn" href="/login">Log in</Link>
         </div>
       )}
 
@@ -62,10 +62,10 @@ export default function Vip() {
           <div className="panel vip-status">
             <div className="vip-badge">{levelIcon[status.level - 1] ?? "⭐"}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="muted">Ваш уровень</div>
-              <div className="vip-name">{cur?.name ?? `Уровень ${status.level}`}</div>
-              <div className="wager-label"><span>{status.points.toLocaleString("ru-RU")} очков</span>
-                <span className="muted">{next ? `до ${next.name}: ${(next.min_points - status.points).toLocaleString("ru-RU")}` : "Максимальный уровень"}</span>
+              <div className="muted">Your level</div>
+              <div className="vip-name">{cur?.name ?? `Level ${status.level}`}</div>
+              <div className="wager-label"><span>{status.points.toLocaleString("en-US")} points</span>
+                <span className="muted">{next ? `${(next.min_points - status.points).toLocaleString("en-US")} to ${next.name}` : "Top level reached"}</span>
               </div>
               <div className="progress"><div style={{ width: pct + "%" }} /></div>
             </div>
@@ -73,36 +73,36 @@ export default function Vip() {
 
           <div className="cols" style={{ margin: "16px 0 28px" }}>
             <div className="panel claim">
-              <div className="muted">Кэшбэк{cur ? ` ${cur.cashback_pct}%` : ""}</div>
+              <div className="muted">Cashback{cur ? ` ${cur.cashback_pct}%` : ""}</div>
               <div className="v">{money(status.cashback_available)}</div>
-              <p className="muted">{status.net_loss > 0 ? `Чистый проигрыш ${money(status.net_loss)}` : `Вы в плюсе на ${money(-status.net_loss)}`} с {fmtDate(status.cashback_from)}</p>
-              <button className="btn gold" disabled={busy === "cashback"} onClick={() => claim("cashback")}>Забрать</button>
+              <p className="muted">{status.net_loss > 0 ? `Net loss ${money(status.net_loss)}` : `You're up ${money(-status.net_loss)}`} since {fmtDate(status.cashback_from)}</p>
+              <button className="btn gold" disabled={busy === "cashback"} onClick={() => claim("cashback")}>Claim</button>
               {msg.cashback && <p className={msg.cashback.ok ? "ok" : "error"}>{msg.cashback.text}</p>}
             </div>
             <div className="panel claim">
-              <div className="muted">Рейкбэк{cur ? ` ${cur.rakeback_pct}%` : ""}</div>
+              <div className="muted">Rakeback{cur ? ` ${cur.rakeback_pct}%` : ""}</div>
               <div className="v">{money(status.rakeback_available)}</div>
-              <p className="muted">Начисляется с каждой ставки реальными деньгами</p>
-              <button className="btn gold" disabled={busy === "rakeback"} onClick={() => claim("rakeback")}>Забрать</button>
+              <p className="muted">Earned on every real-money bet</p>
+              <button className="btn gold" disabled={busy === "rakeback"} onClick={() => claim("rakeback")}>Claim</button>
               {msg.rakeback && <p className={msg.rakeback.ok ? "ok" : "error"}>{msg.rakeback.text}</p>}
             </div>
           </div>
         </>
       )}
 
-      <h2>Уровни</h2>
+      <h2>Levels</h2>
       <div className="ladder">
         {levels.map((l) => (
           <div key={l.level} className={"panel level" + (status?.level === l.level ? " current" : "") + (status && l.level < status.level ? " passed" : "")}>
             <div className="level-icon">{levelIcon[l.level - 1] ?? "⭐"}</div>
             <div className="level-name">{l.name}</div>
-            <div className="muted small">от {l.min_points.toLocaleString("ru-RU")} очков</div>
+            <div className="muted small">from {l.min_points.toLocaleString("en-US")} points</div>
             <div className="level-stats">
-              <div><span className="muted">Кэшбэк</span><b>{l.cashback_pct}%</b></div>
-              <div><span className="muted">Рейкбэк</span><b>{l.rakeback_pct}%</b></div>
+              <div><span className="muted">Cashback</span><b>{l.cashback_pct}%</b></div>
+              <div><span className="muted">Rakeback</span><b>{l.rakeback_pct}%</b></div>
             </div>
             <div className="small">{l.perks}</div>
-            {status?.level === l.level && <span className="gbadge new level-you">Вы здесь</span>}
+            {status?.level === l.level && <span className="gbadge new level-you">You are here</span>}
           </div>
         ))}
       </div>
