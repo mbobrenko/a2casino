@@ -1,5 +1,5 @@
 import LegalPage, { L, co, legalMetadata, pending } from "@/components/LegalPage";
-import { GamesRtpTable } from "@/components/LegalLive";
+import { GamesRtpTable, PlinkoTablesLive } from "@/components/LegalLive";
 import { RULES } from "@/lib/company";
 
 export const metadata = legalMetadata("game-rules");
@@ -23,6 +23,34 @@ server_seed, client_seed, nonce = "...", "...", 0
 print(hashlib.sha256(server_seed.encode()).hexdigest())
 h = hmac.new(server_seed.encode(), f"{client_seed}:{nonce}".encode(), hashlib.sha256).digest()
 print("%.2f" % (int.from_bytes(h[:4], "big") % 10000 / 100))`;
+
+const nodeOriginals = `const crypto = require("crypto");
+const hmac = (key, msg) => crypto.createHmac("sha256", key).update(msg).digest();
+const serverSeed = "...", clientSeed = "...", nonce = 0;
+
+// Crash point
+const H = BigInt("0x" + hmac(serverSeed, clientSeed + ":" + nonce).toString("hex").slice(0, 13));
+const E = 2n ** 52n;
+let c = (99n * E) / (E - H);
+console.log("crash", Number(c < 100n ? 100n : c) / 100);
+
+// Float stream for Mines and Plinko
+function floats(n) {
+  const out = [];
+  for (let cursor = 0; out.length < n; cursor++) {
+    const h = hmac(serverSeed, clientSeed + ":" + nonce + ":" + cursor);
+    for (let i = 0; i < 32 && out.length < n; i += 4) out.push(h.readUInt32BE(i) / 2 ** 32);
+  }
+  return out;
+}
+
+// Mines (M mines)
+const M = 3, tiles = [...Array(25).keys()], f = floats(24);
+for (let k = 0, i = 24; i >= 1; k++, i--) { const j = Math.floor(f[k] * (i + 1)); [tiles[i], tiles[j]] = [tiles[j], tiles[i]]; }
+console.log("mines", tiles.slice(0, M));
+
+// Plinko (16 rows)
+console.log("slot", floats(16).filter((x) => x >= 0.5).length);`;
 
 export default function GameRules() {
   return (
@@ -73,6 +101,7 @@ export default function GameRules() {
           title: "Dice: provably fair",
           lead: <p>Every Dice result can be checked by you. Neither you nor we can change a result after the bet, and you can prove it.</p>,
           items: [
+            <p><b>One seed pair for all originals.</b> Dice, Crash, Mines and Plinko use the same seed pair and the same nonce, so the nonce goes up by one with every bet in any of them. Each result shows the nonce, the client seed and the server seed hash it was made with. Every game page has a &quot;Verify a result&quot; section that recomputes any result in your browser once the seed pair has been rotated.</p>,
             <p><b>Seeds.</b> You have your own seed pair: a secret <b>server seed</b> (a random 64-character string we generate) and a <b>client seed</b> (random by default; you can choose your own, up to 64 characters). A <b>nonce</b> counts your bets with the current pair: it starts at 0 and goes up by 1 with each bet.</p>,
             <p><b>Commitment.</b> Before you bet, the game shows the SHA-256 hash of the current server seed. Because the hash is published in advance, we cannot change the server seed afterwards without the hash changing.</p>,
             <>
@@ -89,6 +118,68 @@ roll = (first 4 bytes of HMAC as an unsigned big-endian integer mod 10000) / 100
               <pre><code>{pyCheck}</code></pre>
             </>,
             <p>If a result does not match, contact {co.supportEmail} with the seeds, nonce and the time of the bet.</p>,
+          ],
+        },
+        {
+          title: "Crash (A2 Originals)",
+          lead: <p>Crash is a single-player game: you choose an <b>auto cash-out</b> multiplier before the bet. A multiplier starts at 1.00x and rises until it &quot;crashes&quot;. If the crash point reaches your auto cash-out, you win your stake × your auto cash-out; otherwise you lose the stake.</p>,
+          items: [
+            <p><b>Settlement.</b> The crash point is decided by the provably fair seeds when the bet is placed and the bet settles immediately. The rising multiplier on screen is an animation of that result; closing the page does not change it. There is no manual cash-out: only the auto cash-out you set counts.</p>,
+            <p><b>Auto cash-out</b> can be set from 1.01x to 1000.00x in steps of 0.01x. The payout is stake × auto cash-out, rounded down to the cent.</p>,
+            <>
+              <p><b>Crash point.</b></p>
+              <pre><code>{`HMAC = HMAC-SHA256(key = server seed, message = "client seed:nonce")
+H = the first 52 bits of HMAC (first 13 hex characters), E = 2^52
+crash point = max(1.00, floor(99 × E / (E − H)) / 100)`}</code></pre>
+              <p>With this formula the chance that the crash point reaches a multiplier m is 99% ÷ m (for example 49.5% for 2.00x, 9.9% for 10.00x). About 1.98% of rounds end at 1.00x.</p>
+            </>,
+            <p><b>House edge and RTP.</b> The expected return is m × 0.99 ÷ m = <b>99%</b> for every auto cash-out: the house edge is 1% and the RTP is 99%.</p>,
+            <p><b>Stakes.</b> The minimum bet is {RULES.minDiceBet}. While a bonus is active its maximum bet applies (normally $5.00 per bet); Crash counts 10% towards bonus wagering by default (see the <L to="bonus-terms" />).</p>,
+          ],
+        },
+        {
+          title: "Mines (A2 Originals)",
+          lead: <p>Mines is played on a 5 × 5 board of 25 tiles. You choose 1 to 24 mines and place your bet; the mines are hidden on the board. Reveal tiles one at a time: each safe tile (a gem) raises the multiplier, a mine ends the round and the stake is lost. You can cash out after any safe tile.</p>,
+          items: [
+            <>
+              <p><b>Multiplier.</b> After n safe tiles with M mines the multiplier is:</p>
+              <pre><code>{`multiplier = 0.99 × C(25, n) / C(25 − M, n)`}</code></pre>
+              <p>C(a, b) is the number of ways to choose b tiles out of a. Example: 3 mines, 2 gems = 0.99 × 300 / 231 = 1.2857x; 24 mines, 1 gem = 24.75x. The payout is stake × multiplier, rounded down to the cent. When every safe tile is revealed the round is cashed out automatically.</p>
+            </>,
+            <p><b>House edge and RTP.</b> The chance of finding n safe tiles in a row is C(25 − M, n) / C(25, n), so cashing out at any point returns <b>99%</b> on average: the house edge is 1% and the RTP is 99% for every number of mines.</p>,
+            <>
+              <p><b>Mine positions.</b> Tiles are numbered 0 to 24, row by row (tile = row × 5 + column). The mines are fixed when the bet is placed:</p>
+              <pre><code>{`float stream: HMAC-SHA256(server seed, "client seed:nonce:cursor") for cursor = 0, 1, 2, …
+each 4 bytes of an HMAC → unsigned big-endian integer / 2^32 (8 floats per HMAC)
+tiles = [0, 1, …, 24]
+for i = 24 down to 1: j = floor(next float × (i + 1)); swap tiles[i] and tiles[j]
+mines = the first M tiles`}</code></pre>
+            </>,
+            <p><b>Open rounds.</b> You can have one Mines round at a time. It is kept if you close or reload the page and continues where you left off. A round left open for 24 hours is cashed out automatically at its current multiplier (with no tile revealed, the stake is returned). While a round is open the seed pair cannot be rotated, because rotating reveals the server seed. When a round ends, all mine positions are shown. During a time-out or self-exclusion you cannot start a round, but you can finish an open one.</p>,
+            <p><b>Stakes.</b> The minimum bet is {RULES.minDiceBet}. While a bonus is active its maximum bet applies to the stake; Mines counts 10% towards bonus wagering by default.</p>,
+          ],
+        },
+        {
+          title: "Plinko (A2 Originals)",
+          lead: <p>A ball is dropped from the top of a triangle of pegs with 8, 12 or 16 rows. At each row it bounces left or right with equal chance and lands in one of the slots at the bottom (rows + 1 slots). Each slot pays a multiplier of your stake, which depends on the number of rows and the risk level (low, medium or high).</p>,
+          items: [
+            <>
+              <p><b>Path.</b> One float per row from the same stream as Mines:</p>
+              <pre><code>{`float stream: HMAC-SHA256(server seed, "client seed:nonce:cursor"), 4 bytes / 2^32 per float
+row k: float ≥ 0.5 → right, otherwise left
+slot = number of right bounces (0 = far left)`}</code></pre>
+              <p>The chance of landing in slot k is C(rows, k) / 2^rows, so the middle slots are hit most often.</p>
+            </>,
+            <p><b>Payout tables and RTP.</b> The payout is stake × the slot&apos;s multiplier, rounded down to the cent. The RTP of a table is the sum over all slots of C(rows, k) / 2^rows × multiplier; every table returns between 98.9% and 99.2% (house edge about 1%). The tables below are loaded live from the game server.</p>,
+            <p><b>Stakes.</b> The minimum bet is {RULES.minDiceBet}. While a bonus is active its maximum bet applies; Plinko counts 10% towards bonus wagering by default.</p>,
+          ],
+          after: <PlinkoTablesLive />,
+        },
+        {
+          title: "Verifying Crash, Mines and Plinko",
+          items: [
+            <p>Use the &quot;Verify a result&quot; section on the game page, or recompute the results yourself after rotating the seed pair, for example in Node.js:</p>,
+            <pre><code>{nodeOriginals}</code></pre>,
           ],
         },
       ]}

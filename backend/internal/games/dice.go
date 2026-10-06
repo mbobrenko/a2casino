@@ -3,6 +3,7 @@ package games
 // Dice is an in-house ("originals") game with provably fair results:
 // roll = HMAC-SHA256(server_seed, client_seed:nonce). The player sees the hash of
 // the server seed before betting and gets the seed itself when rotating it.
+// The seed pair (fair_seeds) is shared by all originals; see fair.go.
 
 import (
 	"context"
@@ -10,7 +11,6 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -19,8 +19,6 @@ import (
 
 	"github.com/mbobrenko/a2casino/backend/internal/auth"
 	"github.com/mbobrenko/a2casino/backend/internal/httpx"
-	"github.com/mbobrenko/a2casino/backend/internal/rg"
-	"github.com/mbobrenko/a2casino/backend/internal/wallet"
 )
 
 const diceEdge = 1.0 // house edge, percent
@@ -88,6 +86,14 @@ func (s *Service) DiceRotate(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return err
 		}
+		// Revealing the server seed would reveal the mines of an unfinished Mines round.
+		var open bool
+		if err := tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM mines_rounds WHERE player_id=$1 AND status='open')`, pid).Scan(&open); err != nil {
+			return err
+		}
+		if open {
+			return httpx.Err(409, "round_open", "finish your Mines round before rotating the seed")
+		}
 		next := seedState{ServerSeed: randomHex(32), ClientSeed: req.ClientSeed, Prev: &st.ServerSeed}
 		if _, err := tx.Exec(r.Context(), `UPDATE fair_seeds SET server_seed=$2, client_seed=$3, nonce=0, prev_server_seed=$4 WHERE player_id=$1`,
 			pid, next.ServerSeed, next.ClientSeed, st.ServerSeed); err != nil {
@@ -104,7 +110,6 @@ type diceReq struct {
 }
 
 func (s *Service) DiceBet(w http.ResponseWriter, r *http.Request) error {
-	pid := auth.From(r.Context()).Subject
 	var req diceReq
 	if err := httpx.Decode(r, &req); err != nil {
 		return err
@@ -112,73 +117,13 @@ func (s *Service) DiceBet(w http.ResponseWriter, r *http.Request) error {
 	if req.Target < 2 || req.Target > 98 {
 		return httpx.Err(400, "bad_target", "target must be between 2 and 98")
 	}
-	if req.Amount < 10 {
-		return httpx.Err(400, "bad_amount", "minimum bet is $0.10")
-	}
-	if err := s.checkPlayerCanPlay(r.Context(), pid); err != nil {
-		return err
-	}
-	var resp map[string]any
-	err := s.Wallet.InTx(r.Context(), func(tx pgx.Tx) error {
-		ctx := r.Context()
-		var gid int64
-		if err := tx.QueryRow(ctx, `SELECT id FROM games WHERE slug='dice' AND status='live'`).Scan(&gid); err != nil {
-			return httpx.Err(404, "game_not_found", "dice is not available")
-		}
-		if err := s.Promo.CheckBet(ctx, tx, pid, req.Amount); err != nil {
-			return err
-		}
-		st, err := s.loadSeed(ctx, tx, pid)
-		if err != nil {
-			return err
-		}
-		roundID := fmt.Sprintf("%s:%s:%d", pid, hashSeed(st.ServerSeed)[:16], st.Nonce)
-		if err := rg.CheckBet(ctx, tx, pid, req.Amount, "dice:bet:"+roundID); err != nil {
-			return err
-		}
-		real, bonus, _, err := s.Wallet.Bet(ctx, tx, pid, req.Amount, "dice:bet:"+roundID, map[string]any{"round_id": roundID, "game_id": gid})
-		if errors.Is(err, wallet.ErrInsufficientFunds) {
-			return httpx.Err(402, "insufficient_funds", "insufficient funds")
-		}
-		if err != nil {
-			return err
-		}
-		if err := s.Promo.OnBet(ctx, tx, pid, gid, real, bonus); err != nil {
-			return err
-		}
+	return s.playInstant(w, r, "dice", req.Amount, func(st seedState) (int64, map[string]any) {
 		roll := DiceRoll(st.ServerSeed, st.ClientSeed, st.Nonce)
 		multiplier := (100 - diceEdge) / req.Target
 		win := int64(0)
 		if float64(roll)/100 < req.Target {
 			win = int64(float64(req.Amount) * multiplier)
 		}
-		winBonus := int64(0)
-		if win > 0 {
-			winBonus = win * bonus / req.Amount
-			if _, err := s.Wallet.Win(ctx, tx, pid, win-winBonus, winBonus, "dice:win:"+roundID, map[string]any{"round_id": roundID}); err != nil {
-				return err
-			}
-		}
-		details := map[string]any{"roll": float64(roll) / 100, "target": req.Target, "multiplier": multiplier, "nonce": st.Nonce, "client_seed": st.ClientSeed, "server_seed_hash": hashSeed(st.ServerSeed)}
-		if _, err := tx.Exec(ctx, `INSERT INTO game_rounds (provider, round_id, player_id, game_id, bet_real, bet_bonus, win_real, win_bonus, status, details, settled_at)
-			VALUES ('originals',$1,$2,$3,$4,$5,$6,$7,'settled',$8,now())`, roundID, pid, gid, real, bonus, win-winBonus, winBonus, details); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `UPDATE fair_seeds SET nonce=nonce+1 WHERE player_id=$1`, pid); err != nil {
-			return err
-		}
-		bal, err := s.Wallet.Balances(ctx, tx, pid)
-		if err != nil {
-			return err
-		}
-		details["win"] = win
-		details["balance"] = bal
-		resp = details
-		return nil
+		return win, map[string]any{"roll": float64(roll) / 100, "target": req.Target, "multiplier": multiplier}
 	})
-	if err != nil {
-		return err
-	}
-	httpx.JSON(w, 200, resp)
-	return nil
 }

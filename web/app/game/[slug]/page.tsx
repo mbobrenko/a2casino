@@ -5,6 +5,9 @@ import { useEffect, useState } from "react";
 import { api, Game } from "@/lib/api";
 import { balanceChanged, useMe } from "@/lib/useMe";
 import Dice from "@/components/Dice";
+import Crash from "@/components/originals/Crash";
+import Mines from "@/components/originals/Mines";
+import Plinko from "@/components/originals/Plinko";
 import BetRulesNotice from "@/components/BetRulesNotice";
 
 type Launch = { type: "iframe" | "originals"; url?: string; game: Game };
@@ -36,7 +39,14 @@ export default function GamePage() {
       {error && <p className="error">{error}</p>}
       {launch && <BetRulesNotice game={launch.game} />}
       {launch?.type === "iframe" && <iframe className="frame" src={launch.url} title={launch.game.title} />}
-      {launch?.type === "originals" && <Dice />}
+      {launch?.type === "originals" && <Original slug={launch.game.slug} />}
     </>
   );
+}
+
+function Original({ slug }: { slug: string }) {
+  if (slug === "crash") return <Crash />;
+  if (slug === "mines") return <Mines />;
+  if (slug === "plinko") return <Plinko />;
+  return <Dice />;
 }

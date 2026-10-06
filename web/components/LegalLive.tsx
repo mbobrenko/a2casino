@@ -180,3 +180,28 @@ export function PaymentMethodsTable() {
     </div>
   );
 }
+
+type PlinkoTable = { rows: number; risk: string; multipliers: number[]; rtp: number };
+
+/** Plinko payout tables as the server applies them, with each table's theoretical RTP. */
+export function PlinkoTablesLive() {
+  const { data, error } = useLoad(() => api<{ tables: PlinkoTable[] }>("/api/originals/plinko/tables").then((r) => r.tables));
+  if (!data || data.length === 0) return <State error={error} empty={!!data} />;
+  return (
+    <div className="table-wrap">
+      <table className="legal-table">
+        <thead><tr><th>Rows</th><th>Risk</th><th>Multipliers by slot, left to right</th><th className="num">RTP</th></tr></thead>
+        <tbody>
+          {data.map((t) => (
+            <tr key={`${t.rows}-${t.risk}`}>
+              <td>{t.rows}</td>
+              <td>{t.risk}</td>
+              <td className="small">{t.multipliers.map((m) => `${m}x`).join(" · ")}</td>
+              <td className="num nowrap">{t.rtp.toFixed(2)}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

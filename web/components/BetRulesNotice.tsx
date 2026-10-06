@@ -19,7 +19,7 @@ export default function BetRulesNotice({ game }: { game: Game }) {
   return (
     <p className="rule-note" role="note">
       {bonus && bonus.max_bet > 0 && (
-        <><b>Bonus active: max bet {money(bonus.max_bet)}</b> per {game.provider === "originals" ? "roll" : "spin or round"}. </>
+        <><b>Bonus active: max bet {money(bonus.max_bet)}</b> per {game.provider === "originals" ? (game.slug === "dice" ? "roll" : "bet") : "spin or round"}. </>
       )}
       {pct === 100
         ? <>{game.title} counts 100% towards bonus wagering.</>

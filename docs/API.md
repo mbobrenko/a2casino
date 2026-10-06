@@ -1,4 +1,4 @@
-# A2Casino API (v0.3)
+# A2Casino API (v0.4)
 
 Base URL: `http://localhost:8080`. JSON everywhere. Money is integer **cents** (USD).
 Errors: `{"code": "insufficient_funds", "message": "..."}` with a 4xx/5xx status.
@@ -27,14 +27,48 @@ For local testing the player's network country can be faked with the `X-Country:
 | GET | `/api/vip` | | `{levels, status: {level, points, cashback_available, cashback_from, net_loss, rakeback_available}}`; 1 point = $1 of real-money bets |
 | POST | `/api/vip/claim-cashback` / `claim-rakeback` | | `{amount}` credited to real balance; 409 `nothing_to_claim` below $1 |
 | POST | `/api/games/{slug}/launch` | | `{type: "iframe", url, game}` or `{type: "originals", game}` |
-| GET | `/api/originals/dice/seed` | | `{server_seed_hash, client_seed, nonce, previous_server_seed}` |
-| POST | `/api/originals/dice/seed` | `{client_seed?}` | new seed; reveals the previous server seed |
-| POST | `/api/originals/dice/bet` | `{amount, target}` (win if roll < target, 2..98) | `{roll, target, multiplier, win, nonce, client_seed, server_seed_hash, balance}`; 400 `max_bet_exceeded` above the active bonus's max bet |
+| GET | `/api/originals/seed` (alias `/api/originals/dice/seed`) | | `{server_seed_hash, client_seed, nonce, previous_server_seed}`: the seed pair shared by all originals |
+| POST | `/api/originals/seed` (alias `/api/originals/dice/seed`) | `{client_seed?}` | new seed pair, nonce 0; reveals the previous server seed; 409 `round_open` while a Mines round is open |
+| POST | `/api/originals/dice/bet` | `{amount, target}` (win if roll < target, 2..98) | `{game, roll, target, multiplier, bet, win, nonce, client_seed, server_seed_hash, balance}`; 400 `max_bet_exceeded` above the active bonus's max bet |
+| POST | `/api/originals/crash/bet` | `{amount, target}` (auto cash-out 1.01..1000, two decimals) | `{game, crash_point, target, cashed_out, bet, win, nonce, client_seed, server_seed_hash, balance}`; settles at once, win = amount × target when crash_point ≥ target; 400 `bad_target` |
+| POST | `/api/originals/plinko/bet` | `{amount, rows: 8/12/16, risk: low/medium/high}` | `{game, rows, risk, path: [0/1 per row, 1 = right], slot, multiplier, bet, win, nonce, client_seed, server_seed_hash, balance}`; 400 `bad_rows` / `bad_risk` |
+| GET | `/api/originals/plinko/tables` | (no auth) | `{tables: [{rows, risk, multipliers[], rtp}]}` |
+| POST | `/api/originals/mines/start` | `{amount, mines: 1..24}` | `{round: MinesRound, balance}`; 409 `round_open` (one open round per player), 400 `bad_mines` |
+| POST | `/api/originals/mines/reveal` | `{tile: 0..24}` (row × 5 + column) | `{round, balance}`; a mine ends the round (`status: lost`); revealing the last safe tile cashes out automatically; 409 `no_round` / `already_revealed`, 400 `bad_tile` |
+| POST | `/api/originals/mines/cashout` | | `{round, balance}`; pays `round.payout`; 409 `no_round` / `nothing_revealed` |
+| GET | `/api/originals/mines/current` | | `{round: MinesRound or null, balance}`: the open round, to resume after a reload |
 | GET | `/api/payments/methods` | (no auth) | `{methods: [{code, title, kind: fiat/crypto/gateway, provider, network?, coin?, min_cents, deposit, withdraw}]}`; a code can appear twice (mock deposit connector and manual payout method): pick by the `deposit` / `withdraw` flag |
 | POST | `/api/payments/deposit` | `{method, amount}` | fiat: `{type: "redirect", url, payment_id}`; crypto: `{type: "address", network, address, min_cents, note}` |
 | POST | `/api/payments/withdraw` | `{method, amount, address?}` | `{payment_id, status: "pending"}`; 400 `amount_too_small` (< $10), `bad_address` (wrong format for the network), `deposit_only`; 403 `kyc_required` until verified (see KYC below), `address_blocked`, `withdrawals_blocked`; allowed during a time-out / self-exclusion; 409 `bonus_active` while wagering a bonus |
 | GET | `/api/payments` | | `{items: [{id, direction, method, amount, status, address, external_ref, crypto_amount, network, paid_at, created_at, tx_url?}]}`; a paid crypto withdrawal has the tx hash in `external_ref` and a block explorer link in `tx_url` |
 | POST | `/api/dev/crypto/simulate` | `{method, amount_usd_cents, risk?: "high"}` | dev only: pretends the player sent crypto |
+
+### A2 Originals (provably fair)
+
+Dice, Crash, Mines and Plinko (`provider: originals`, studio "A2 Originals", RTP 99%) share **one seed pair per player**
+(`fair_seeds`): the server seed's SHA-256 is shown before betting, the nonce goes up by one with every bet in any of the
+four games, and rotating the pair reveals the previous server seed. All results use HMAC-SHA256 with the server seed
+(as text) as the key; the formulas live in `backend/internal/games/fair.go` and `web/lib/fair.ts` (in-browser verifier):
+
+- Dice: `HMAC(server, "client:nonce")`, first 4 bytes as uint32 `% 10000 / 100`; pays `amount × 99 / target`.
+- Crash: H = first 52 bits of `HMAC(server, "client:nonce")`, E = 2^52, `crash = max(1.00, floor(99·E / (E − H)) / 100)`,
+  so P(crash ≥ m) = 0.99 / m and every auto cash-out returns 99%. Single player, no manual cash-out (the site animates the result).
+- Float stream (Mines, Plinko): `HMAC(server, "client:nonce:cursor")` for cursor 0, 1, …; every 4 bytes → uint32 / 2^32.
+- Mines: Fisher–Yates over tiles 0..24 (`for i = 24..1: j = floor(f × (i+1)); swap`), the first `mines` tiles are mines.
+  Multiplier after n gems = `0.99 × C(25, n) / C(25 − mines, n)`, payout rounded down to the cent.
+- Plinko: one float per row, `≥ 0.5` = right; slot = number of rights; pays the slot of the rows/risk table
+  (`/api/originals/plinko/tables`, RTP 98.9–99.2%).
+
+Every original: min bet $0.10, the active bonus's max bet (400 `max_bet_exceeded`), RG checks (403 `timeout`,
+`self_excluded`, `loss_limit`, `wager_limit`, `session_limit`), wagering contribution 10% by default (editable per game in
+the back office), VIP points / rakeback on the real-money part. Rounds are recorded in `game_rounds` (provider `originals`,
+`details` holds the result and the seed fields) and show in `/api/rounds` and the back-office bet log.
+
+MinesRound = `{id, bet, mines, revealed: [tile], status: open/lost/cashed, win, multiplier, next_multiplier?, payout,
+mines_positions? (only once the round is over), nonce, client_seed, server_seed_hash, created_at}`. The stake is taken at
+start (the game_rounds row is `open` until the round ends). Reveal and cash-out are allowed during a time-out /
+self-exclusion so an open round can be finished. A round left open for 24 hours is cashed out by a background task
+(every 10 minutes) at its current multiplier; with no tile revealed the stake is returned (`details.auto_cashout: true`).
 
 ### Responsible gaming
 
@@ -57,7 +91,7 @@ Setting a new limit or lowering one applies immediately; raising or removing one
 Exclusion = `{id, kind: timeout/self_exclusion, duration, starts_at, ends_at (null = permanent), by_staff, reason?, reopen_requested_at, period_over, reopen_at}`.
 A time-out ends by itself; a self-exclusion stays in force after `ends_at` until a reopen request + 24 hours.
 While excluded the player can log in, see the balance and withdraw; everything else that moves money in is refused with
-403 `timeout` or `self_excluded`: deposits, bets (dice, provider `bet` callbacks), free spins, claiming offers, promo codes,
+403 `timeout` or `self_excluded`: deposits, bets (originals, provider `bet` callbacks), free spins, claiming offers, promo codes,
 staff-given bonuses. Pending deposit bonuses are cancelled when an exclusion starts, and deposit bonuses / marketing are
 suppressed during it.
 
@@ -167,9 +201,9 @@ through NOWPayments mass payouts is a later step.
 ### Bonus rules
 
 While a player has an active bonus, a bet above the bonus's `max_bet` (default $5) is refused with 400
-`max_bet_exceeded` ("the maximum bet while a bonus is active is $5.00") before any money moves: Dice and the provider
+`max_bet_exceeded` ("the maximum bet while a bonus is active is $5.00") before any money moves: the originals and the provider
 bet callback alike; free spins are not limited. Each bet adds `amount × wagering_contribution / 100` to wagering
-(Dice 10%, other games 100% by default); VIP points and rakeback still count the full real-money bet.
+(A2 Originals 10%, other games 100% by default); VIP points and rakeback still count the full real-money bet.
 
 ## Provider callbacks (seamless wallet)
 

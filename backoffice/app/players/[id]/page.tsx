@@ -710,6 +710,32 @@ function RoundsTab({ id, reloadKey }: { id: string; reloadKey: number }) {
                             )}
                           </div>
                         )}
+                        {d.game === "crash" && (
+                          <div className="dice-summary">
+                            <span>Crash point <b>×{String(d.crash_point)}</b></span>
+                            <span>Автовывод <b>×{String(d.target)}</b></span>
+                            <span>{d.cashed_out ? "Выигрыш" : "Проигрыш"}</span>
+                            <span>Nonce <b>{String(d.nonce)}</b></span>
+                          </div>
+                        )}
+                        {d.game === "mines" && (
+                          <div className="dice-summary">
+                            <span>Мин <b>{String(d.mines)}</b></span>
+                            <span>Открыто <b>{Array.isArray(d.revealed) ? d.revealed.length : 0}</b></span>
+                            {"multiplier" in d && <span>Множитель <b>×{Number(d.multiplier).toFixed(4)}</b></span>}
+                            {"result" in d && <span>Итог <b>{d.result === "lost" ? "мина" : d.auto_cashout ? "автовывод" : "вывод"}</b></span>}
+                            <span>Nonce <b>{String(d.nonce)}</b></span>
+                          </div>
+                        )}
+                        {d.game === "plinko" && (
+                          <div className="dice-summary">
+                            <span>Рядов <b>{String(d.rows)}</b></span>
+                            <span>Риск <b>{String(d.risk)}</b></span>
+                            <span>Слот <b>{String(d.slot)}</b></span>
+                            <span>Множитель <b>×{String(d.multiplier)}</b></span>
+                            <span>Nonce <b>{String(d.nonce)}</b></span>
+                          </div>
+                        )}
                         <pre className="json">{JSON.stringify(r.details, null, 2)}</pre>
                       </td>
                     </tr>

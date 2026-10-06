@@ -50,6 +50,7 @@ func main() {
 
 	go expireBonuses(ctx, &promo.Service{Wallet: w})
 	go syncSanctions(ctx, &aml.Service{Pool: pool})
+	go closeStaleMines(ctx, &games.Service{Cfg: cfg, Wallet: w, Promo: &promo.Service{Wallet: w}})
 
 	srv := &http.Server{Addr: cfg.Addr, Handler: Router(cfg, w, issuer), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
@@ -76,6 +77,18 @@ func expireBonuses(ctx context.Context, s *promo.Service) {
 		} else if n > 0 {
 			log.Printf("bonus expiry: closed %d bonuses", n)
 		}
+	}
+}
+
+// closeStaleMines cashes out Mines rounds left open for 24 hours, every 10 minutes.
+func closeStaleMines(ctx context.Context, s *games.Service) {
+	for {
+		if n, err := s.CloseStaleMines(ctx, games.MinesStaleAfter); err != nil {
+			log.Printf("mines: auto cash-out: %v", err)
+		} else if n > 0 {
+			log.Printf("mines: auto cashed out %d stale rounds", n)
+		}
+		time.Sleep(10 * time.Minute)
 	}
 }
 
@@ -130,6 +143,7 @@ func Router(cfg config.Config, w *wallet.Wallet, issuer *auth.Issuer) http.Handl
 		r.Get("/promo/offers", h(pr.Offers))
 		r.Get("/vip/levels", h(pr.VipLevels))
 		r.Get("/payments/methods", h(pay.ListMethods))
+		r.Get("/originals/plinko/tables", h(gm.PlinkoTablesHandler))
 
 		r.Group(func(r chi.Router) {
 			r.Use(issuer.Require("player"))
@@ -149,6 +163,15 @@ func Router(cfg config.Config, w *wallet.Wallet, issuer *auth.Issuer) http.Handl
 			r.Get("/originals/dice/seed", h(gm.DiceSeed))
 			r.Post("/originals/dice/seed", h(gm.DiceRotate))
 			r.Post("/originals/dice/bet", h(gm.DiceBet))
+			// One seed pair is shared by all originals; the dice/seed paths are kept as aliases.
+			r.Get("/originals/seed", h(gm.DiceSeed))
+			r.Post("/originals/seed", h(gm.DiceRotate))
+			r.Post("/originals/crash/bet", h(gm.CrashBet))
+			r.Post("/originals/plinko/bet", h(gm.PlinkoBet))
+			r.Post("/originals/mines/start", h(gm.MinesStart))
+			r.Post("/originals/mines/reveal", h(gm.MinesReveal))
+			r.Post("/originals/mines/cashout", h(gm.MinesCashout))
+			r.Get("/originals/mines/current", h(gm.MinesCurrent))
 			r.Post("/payments/deposit", h(pay.Deposit))
 			r.Post("/payments/withdraw", h(pay.Withdraw))
 			r.Get("/payments", h(pay.History))

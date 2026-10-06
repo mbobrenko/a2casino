@@ -95,6 +95,7 @@ export default function LobbyPage() {
         <>
           {me && row("Recently played", lobby.recent, "🕘")}
           {row("Recommended for you", lobby.recommended, "✨")}
+          {row("A2 Originals · provably fair", games?.filter((g) => g.provider === "originals"), "⚡")}
           {row("Popular", lobby.popular, "🔥")}
           {row("New releases", lobby.new, "🆕")}
         </>
