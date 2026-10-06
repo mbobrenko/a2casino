@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, Balance, fmtDate, fmtShort, money } from "@/lib/api";
 import { useMe } from "@/lib/useMe";
+import GameThumb from "@/components/GameThumb";
 import { Payment, PlayerBonus, VipLevel, VipStatus, levelIcon, paymentStatus, roundStatusText, shortHash, txText } from "@/lib/labels";
 import BonusCard from "@/components/BonusCard";
 import Verification, { verificationText } from "@/components/Verification";
@@ -15,7 +16,7 @@ type Profile = {
   id: string; email: string; country: string; currency: string; status: string; verification: string; created_at: string;
   balance: Balance; vip: VipStatus; stats: Stats;
 };
-type Round = { id: number; game: string; emoji: string; provider: string; bet: number; win: number; status: string; created_at: string };
+type Round = { id: number; game: string; slug?: string; color?: string; emoji: string; provider: string; bet: number; win: number; status: string; created_at: string };
 type Tx = { id: string; type: string; amount: number; created_at: string };
 
 const countryNames: Record<string, string> = {
@@ -125,7 +126,7 @@ export default function ProfilePage() {
             <tbody>{rounds?.map((r) => (
               <tr key={r.id}>
                 <td className="nowrap">{fmtShort(r.created_at)}</td>
-                <td>{r.emoji} {r.game} <span className="muted small hide-sm">{providerText[r.provider] ?? r.provider}</span></td>
+                <td><span className="round-game"><GameThumb slug={r.slug} emoji={r.emoji} color={r.color} size={24} /><span>{r.game} <span className="muted small hide-sm">{providerText[r.provider] ?? r.provider}</span></span></span></td>
                 <td>{money(r.bet)}</td>
                 <td className={r.win > 0 ? "win" : "muted"}>{money(r.win)}</td>
                 <td className="hide-sm"><span className={"status " + (r.status === "settled" ? "completed" : r.status === "open" ? "pending" : "failed")}>{roundStatusText[r.status] ?? r.status}</span></td>

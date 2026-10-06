@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Lilita_One } from "next/font/google";
 import Header from "@/components/Header";
 import RealityCheck from "@/components/RealityCheck";
 import { LEGAL_PAGES } from "@/lib/company";
 import "./globals.css";
+
+// Display face for game titles and headings (self-hosted by next/font at build time).
+const display = Lilita_One({ weight: "400", subsets: ["latin"], display: "swap", variable: "--font-display" });
 
 export const metadata: Metadata = {
   title: "A2Casino",
@@ -12,7 +16,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={display.variable}>
       <body>
         <Header />
         <main className="container">{children}</main>

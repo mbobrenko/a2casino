@@ -151,7 +151,7 @@ func (s *Service) games(ctx context.Context, sql string, args ...any) ([]Game, e
 func (s *Service) PlayerRounds(w http.ResponseWriter, r *http.Request) error {
 	pid := auth.From(r.Context()).Subject
 	limit := httpx.IntQuery(r, "limit", 50, 200)
-	rows, err := s.Wallet.Pool.Query(r.Context(), `SELECT r.id, g.title, g.emoji, r.provider, r.bet_real+r.bet_bonus, r.win_real+r.win_bonus, r.status, r.created_at
+	rows, err := s.Wallet.Pool.Query(r.Context(), `SELECT r.id, g.title, g.slug, g.emoji, g.color, r.provider, r.bet_real+r.bet_bonus, r.win_real+r.win_bonus, r.status, r.created_at
 		FROM game_rounds r JOIN games g ON g.id=r.game_id WHERE r.player_id=$1 ORDER BY r.created_at DESC, r.id DESC LIMIT $2`, pid, limit)
 	if err != nil {
 		return err
@@ -159,7 +159,9 @@ func (s *Service) PlayerRounds(w http.ResponseWriter, r *http.Request) error {
 	type item struct {
 		ID        int64     `json:"id"`
 		Game      string    `json:"game"`
+		Slug      string    `json:"slug"`
 		Emoji     string    `json:"emoji"`
+		Color     string    `json:"color"`
 		Provider  string    `json:"provider"`
 		Bet       int64     `json:"bet"`
 		Win       int64     `json:"win"`

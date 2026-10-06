@@ -10,6 +10,7 @@ import Mines from "@/components/originals/Mines";
 import Plinko from "@/components/originals/Plinko";
 import BetRulesNotice from "@/components/BetRulesNotice";
 import OriginalsInfo from "@/components/originals/OriginalsInfo";
+import GameHeader from "@/components/GameHeader";
 
 type Launch = { type: "iframe" | "originals"; url?: string; game: Game };
 
@@ -18,6 +19,8 @@ export default function GamePage() {
   const { me, ready } = useMe();
   const [launch, setLaunch] = useState<Launch | null>(null);
   const [error, setError] = useState("");
+  // Logged out: show the game's header from the public catalogue above the log-in prompt.
+  const [preview, setPreview] = useState<Game | null>(null);
 
   useEffect(() => {
     if (!me) return;
@@ -31,12 +34,22 @@ export default function GamePage() {
     return () => window.removeEventListener("message", onMsg);
   }, []);
 
+  useEffect(() => {
+    if (!ready || me) return;
+    api<{ games: Game[] }>("/api/games").then((d) => setPreview(d.games.find((g) => g.slug === slug) ?? null)).catch(() => {});
+  }, [ready, me, slug]);
+
   if (ready && !me) {
-    return <div className="panel"><h2>Log in to play</h2><Link className="btn" href="/login">Log in</Link></div>;
+    return (
+      <>
+        {preview && <GameHeader game={preview} />}
+        <div className="panel"><h2>Log in to play</h2><Link className="btn" href="/login">Log in</Link></div>
+      </>
+    );
   }
   return (
     <>
-      <h1>{launch?.game.title ?? "Loading…"}</h1>
+      {launch ? <GameHeader game={launch.game} /> : <div className="game-head skeleton shimmer" />}
       {error && <p className="error">{error}</p>}
       {launch && <BetRulesNotice game={launch.game} />}
       {launch?.type === "iframe" && <iframe className="frame" src={launch.url} title={launch.game.title} />}
