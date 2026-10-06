@@ -48,7 +48,7 @@ type Game struct {
 	Description string   `json:"description"`
 	// Percentage of each bet that counts towards bonus wagering.
 	WageringContribution int `json:"wagering_contribution"`
-	// Maximum win per bet in cents (A2 Originals); null = no cap set by us.
+	// Maximum win per bet in cents (A2 Labs); null = no cap set by us.
 	MaxWin *int64 `json:"max_win"`
 }
 

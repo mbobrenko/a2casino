@@ -279,7 +279,7 @@ th { color: var(--muted); font-weight: 500; }
 .progress.over > div { background: var(--bad); }
 .reality-actions .btn, .rg-buttons .btn, .rg-limit-form .btn, .modal .btn { font-family: inherit; line-height: 1.25; }
 
-/* A2 Originals: Crash, Mines, Plinko and the provably fair panel */
+/* A2 Labs: Crash, Mines, Plinko and the provably fair panel */
 .btn.wide { flex: 1; width: 100%; }
 .fair label { margin-top: 8px; }
 .verify { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 12px; }

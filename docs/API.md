@@ -43,9 +43,9 @@ For local testing the player's network country can be faked with the `X-Country:
 | GET | `/api/payments` | | `{items: [{id, direction, method, amount, status, address, external_ref, crypto_amount, network, paid_at, created_at, tx_url?}]}`; a paid crypto withdrawal has the tx hash in `external_ref` and a block explorer link in `tx_url` |
 | POST | `/api/dev/crypto/simulate` | `{method, amount_usd_cents, risk?: "high"}` | dev only: pretends the player sent crypto |
 
-### A2 Originals (provably fair)
+### A2 Labs (provably fair)
 
-Dice, Crash, Mines and Plinko (`provider: originals`, studio "A2 Originals") share **one seed pair per player**
+Dice, Crash, Mines and Plinko (`provider: originals`, studio "A2 Labs") share **one seed pair per player**
 (`fair_seeds`): the server seed's SHA-256 is shown before betting, the nonce goes up by one with every bet in any of the
 four games, and rotating the pair reveals the previous server seed. All results use HMAC-SHA256 with the server seed
 (as text) as the key; the formulas live in `backend/internal/games/fair.go` and `web/lib/fair.ts` (in-browser verifier):
@@ -218,7 +218,7 @@ through NOWPayments mass payouts is a later step.
 While a player has an active bonus, a bet above the bonus's `max_bet` (default $5) is refused with 400
 `max_bet_exceeded` ("the maximum bet while a bonus is active is $5.00") before any money moves: the originals and the provider
 bet callback alike; free spins are not limited. Each bet adds `amount × wagering_contribution / 100` to wagering
-(A2 Originals 10%, other games 100% by default); VIP points and rakeback still count the full real-money bet.
+(A2 Labs 10%, other games 100% by default); VIP points and rakeback still count the full real-money bet.
 
 ## Provider callbacks (seamless wallet)
 

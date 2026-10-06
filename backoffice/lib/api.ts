@@ -134,7 +134,7 @@ export const ERROR_RU: Record<string, string> = {
   unknown_method: "Выберите метод выплаты",
   bad_wagering_contribution: "Вклад в отыгрыш — от 0 до 100%",
   bad_rtp: "RTP — только одно из разрешённых значений",
-  rtp_not_configurable: "RTP и макс. выигрыш настраиваются только для A2 Originals; RTP игр провайдеров задаёт провайдер",
+  rtp_not_configurable: "RTP и макс. выигрыш настраиваются только для A2 Labs; RTP игр провайдеров задаёт провайдер",
   bad_max_win: "Макс. выигрыш — от $1 до $10 000 000",
   bad_max_bet: "Макс. ставка не может быть отрицательной",
   not_stricter: "Сотрудник может только установить лимит или сделать его строже",

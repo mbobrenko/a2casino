@@ -112,7 +112,7 @@ export type Game = {
   studio: string; emoji: string; color: string; tags: string[] | null; description: string;
   /** Percentage of each bet that counts towards bonus wagering. */
   wagering_contribution: number;
-  /** A2 Originals: maximum win per bet in cents (wins above are capped); null = none. */
+  /** A2 Labs: maximum win per bet in cents (wins above are capped); null = none. */
   max_win: number | null;
 };
 

@@ -99,7 +99,7 @@ export default function LobbyPage() {
       {!filtered && (
         <>
           {(loading || (originals && originals.length > 0)) && (
-            <GameRow title="A2 Originals" icon="bolt" size="lg" games={loading ? undefined : originals} studios={studios} loading={loading}
+            <GameRow title="A2 Labs" icon="bolt" size="lg" games={loading ? undefined : originals} studios={studios} loading={loading}
               sub={<span className="fair-chip"><Icon name="shield" size={13} />Provably fair · up to 99% RTP</span>} />
           )}
           {me && lobby && <GameRow title="Continue playing" icon="clock" games={lobby.recent} studios={studios} />}

@@ -1,6 +1,6 @@
 package games
 
-// Shared bet flow of the A2 Originals: game lookup, bonus max bet, responsible gaming limits,
+// Shared bet flow of the A2 Labs: game lookup, bonus max bet, responsible gaming limits,
 // the wallet debit (real first, then bonus), VIP/wagering accounting and the provably fair nonce.
 
 import (

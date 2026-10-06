@@ -1,6 +1,6 @@
 package games
 
-// Provably fair maths shared by the A2 Originals (Dice, Crash, Mines, Plinko).
+// Provably fair maths shared by the A2 Labs (Dice, Crash, Mines, Plinko).
 //
 // Every player has ONE seed pair (fair_seeds) shared by all originals: a secret server seed
 // (its SHA-256 hash is shown before betting), a client seed and a nonce that goes up by one with

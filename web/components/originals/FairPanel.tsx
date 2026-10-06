@@ -1,5 +1,5 @@
 "use client";
-// Provably fair panel shared by all A2 Originals: the current seed pair (one pair for all
+// Provably fair panel shared by all A2 Labs: the current seed pair (one pair for all
 // originals), seed rotation and an in-browser verifier (WebCrypto) for any game.
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
@@ -54,7 +54,7 @@ export default function FairPanel({ game, refreshKey, locked, pick, rtp }: { gam
     <div className="panel fair">
       <h2>Provably fair</h2>
       <p className="muted small">
-        One seed pair is used for all A2 Originals. The hash of the server seed is shown before you bet; the seed itself is
+        One seed pair is used for all A2 Labs. The hash of the server seed is shown before you bet; the seed itself is
         revealed when you rotate the pair, so you can check every result made with it. The nonce goes up by one with each bet.
       </p>
       {seed && (

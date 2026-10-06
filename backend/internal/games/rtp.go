@@ -1,6 +1,6 @@
 package games
 
-// Configurable RTP of the A2 Originals. B2B buyers (casinos, aggregators) need a specific return,
+// Configurable RTP of the A2 Labs. B2B buyers (casinos, aggregators) need a specific return,
 // so each original can run at one of a fixed list of certified versions (RTPPresets). The RTP is
 // set per game in the back office (games.rtp, admin only, audited); it is the same for every player
 // and never changes dynamically. A change applies to new bets only: every round records the RTP it

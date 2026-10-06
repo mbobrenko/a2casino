@@ -154,7 +154,7 @@ func (s *Service) updateOriginalsMaths(ctx context.Context, tx pgx.Tx, staff aut
 		return err
 	}
 	if provider != "originals" {
-		return httpx.Err(400, "rtp_not_configurable", "the RTP and max win can only be set for A2 Originals; a provider game's RTP is set by the provider")
+		return httpx.Err(400, "rtp_not_configurable", "the RTP and max win can only be set for A2 Labs; a provider game's RTP is set by the provider")
 	}
 	if rtp != nil {
 		if !games.ValidRTP(*rtp) {
@@ -206,8 +206,8 @@ func (s *Service) UpdateGame(w http.ResponseWriter, r *http.Request) error {
 		Emoji            *string   `json:"emoji"`
 		Color            *string   `json:"color"`
 		Contribution     *int      `json:"wagering_contribution"`
-		RTP              *int      `json:"rtp"`     // A2 Originals only, admin only: one of games.RTPPresets
-		MaxWin           *int64    `json:"max_win"` // A2 Originals only, admin only: cents per bet
+		RTP              *int      `json:"rtp"`     // A2 Labs only, admin only: one of games.RTPPresets
+		MaxWin           *int64    `json:"max_win"` // A2 Labs only, admin only: cents per bet
 		Comment          string    `json:"comment"`
 	}
 	if err := httpx.Decode(r, &req); err != nil {

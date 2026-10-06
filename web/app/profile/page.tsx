@@ -23,7 +23,7 @@ const countryNames: Record<string, string> = {
   CL: "Chile", MX: "Mexico", GT: "Guatemala", HN: "Honduras", SV: "El Salvador",
   NI: "Nicaragua", BO: "Bolivia", CR: "Costa Rica", PA: "Panama", BR: "Brazil",
 };
-const providerText: Record<string, string> = { originals: "A2 Originals", mock: "Provider", freespins: "Free spins" };
+const providerText: Record<string, string> = { originals: "A2 Labs", mock: "Provider", freespins: "Free spins" };
 
 type Tab = "rounds" | "tx" | "payments";
 

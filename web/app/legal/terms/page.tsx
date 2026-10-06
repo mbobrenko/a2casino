@@ -112,7 +112,7 @@ export default function Terms() {
             <p key="a">The rules of each game, its return to player (RTP) and our provably fair Dice are described in <L to="game-rules" />. A bet is accepted only when it has been confirmed by our system and the amount has been taken from your balance.</p>,
             <p key="b">Bets are taken from your real balance first and, when that is not enough, from your bonus balance. Wins are credited in the same proportion as the bet was funded.</p>,
             <p key="c">The record of bets, wins and transactions kept on our servers and by the game provider is final. If the record shown in your browser differs from our server record, the server record applies.</p>,
-            <p key="d">The maximum amount that can be won is {pending.maxWin}. Individual games may set their own lower limits; for our own A2 Originals the maximum win per bet is set out in the <L to="game-rules" />.</p>,
+            <p key="d">The maximum amount that can be won is {pending.maxWin}. Individual games may set their own lower limits; for our own A2 Labs the maximum win per bet is set out in the <L to="game-rules" />.</p>,
           ],
         },
         {

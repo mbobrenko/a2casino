@@ -1,4 +1,4 @@
-// In-browser verification of A2 Originals results (WebCrypto), mirroring backend/internal/games/fair.go,
+// In-browser verification of A2 Labs results (WebCrypto), mirroring backend/internal/games/fair.go,
 // rtp.go and plinko_tables.go. All games use HMAC-SHA256 with the server seed (as text) as the key.
 // Payouts depend on the RTP the round was played at (`rtp` in every result, in percent): the operator
 // picks one of RTP_PRESETS per game; it is the same for every player and recorded with each round.

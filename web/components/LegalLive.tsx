@@ -80,7 +80,7 @@ export function OriginalsRtpTable() {
   );
 }
 
-/** The maximum win per bet of the A2 Originals in running text (the common value, or "up to" the highest). */
+/** The maximum win per bet of the A2 Labs in running text (the common value, or "up to" the highest). */
 export function OriginalsMaxWin() {
   const { data } = useLoad(originals);
   const caps = (data ?? []).map((g) => g.max_win).filter((x): x is number => !!x);

@@ -71,7 +71,7 @@ export const RULES = {
   /** Default maximum bet while a bonus is active; each offer can set its own. */
   bonusMaxBet: "$5.00",
   minDiceBet: "$0.10",
-  /** Default maximum win per bet in the A2 Originals (games.max_win; the pages show the live value). */
+  /** Default maximum win per bet in the A2 Labs (games.max_win; the pages show the live value). */
   originalsMaxWin: "$10,000.00",
   minRewardClaim: "$1.00",
   cryptoConfirmations: 3,

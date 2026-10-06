@@ -152,8 +152,8 @@ function GamesView() {
               <th>Категория</th>
               <th>Статус</th>
               <th title="Быстро показать / скрыть">Live</th>
-              <th className="num" title="A2 Originals: сертифицированная версия RTP, одна для всех игроков. Меняет только администратор">RTP</th>
-              <th className="num" title="A2 Originals: максимальный выигрыш с одной ставки">Макс. выигрыш</th>
+              <th className="num" title="A2 Labs: сертифицированная версия RTP, одна для всех игроков. Меняет только администратор">RTP</th>
+              <th className="num" title="A2 Labs: максимальный выигрыш с одной ставки">Макс. выигрыш</th>
               <th className="num" title="Какая доля ставки идёт в отыгрыш бонуса">Вклад в отыгрыш</th>
               <th className="num">Порядок</th>
               <th>Новинка</th>
