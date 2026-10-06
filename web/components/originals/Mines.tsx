@@ -8,10 +8,10 @@ import FairPanel, { Pick } from "./FairPanel";
 type Round = {
   id: number; bet: number; mines: number; revealed: number[]; status: "open" | "lost" | "cashed"; win: number;
   multiplier: number; next_multiplier?: number; payout: number; mines_positions?: number[];
-  nonce: number; client_seed: string; server_seed_hash: string;
+  nonce: number; client_seed: string; server_seed_hash: string; rtp: number; max_win: number; max_win_reached: boolean;
 };
 
-export default function Mines() {
+export default function Mines({ rtp: gameRtp, maxWin: gameMax }: { rtp: number; maxWin: number }) {
   const [amount, setAmount] = useState("1.00");
   const [mines, setMines] = useState(3);
   const [round, setRound] = useState<Round | null>(null);
@@ -53,7 +53,12 @@ export default function Mines() {
   const cashout = () => call("/api/originals/mines/cashout", {});
 
   const n = round?.revealed.length ?? 0;
-  const nextMult = open ? round!.next_multiplier : minesMultiplier(mines, 1);
+  // An open round keeps the RTP and cap it started with; a new round uses the game's current ones.
+  const rtp = open ? round!.rtp : gameRtp;
+  const maxWin = open ? round!.max_win : gameMax;
+  const nextMult = open ? round!.next_multiplier : minesMultiplier(mines, 1, rtp);
+  const stake = Math.round((parseFloat(amount) || 0) * 100);
+  const maxMult = minesMultiplier(mines, 25 - mines, rtp);
 
   return (
     <div className="cols">
@@ -74,8 +79,12 @@ export default function Mines() {
           {!round && <span className="muted">Pick the number of mines and start a round</span>}
           {open && <span>Revealed {n} · current <b>{round!.multiplier.toFixed(4)}x</b>{nextMult && <> · next {nextMult.toFixed(4)}x</>}</span>}
           {round?.status === "lost" && <span className="lose">Boom! You hit a mine.</span>}
-          {round?.status === "cashed" && <span className="win">Cashed out {round.multiplier.toFixed(4)}x · won {money(round.win)}</span>}
+          {round?.status === "cashed" && <span className="win">Cashed out {round.multiplier.toFixed(4)}x · won {money(round.win)}{round.max_win_reached ? " (maximum win reached)" : ""}</span>}
         </div>
+        <p className="muted small" style={{ textAlign: "center", margin: "4px 0 8px" }}>
+          RTP {rtp}%{open && round!.rtp !== gameRtp ? " (this round's RTP)" : ""}
+          {maxWin > 0 && <> · maximum win {money(maxWin)} per bet{stake * maxMult > maxWin ? `: reached at ${money(maxWin)}, then the round cashes out` : ""}</>}
+        </p>
         <div className="row">
           <label style={{ flex: 1 }}>Bet, $<input type="number" min="0.1" step="0.1" value={amount} disabled={open} onChange={(e) => setAmount(e.target.value)} /></label>
           <label style={{ flex: 1 }}>Mines
@@ -110,7 +119,7 @@ export default function Mines() {
           </div>
         )}
       </div>
-      <FairPanel game="mines" refreshKey={refresh} pick={pick} locked={open} />
+      <FairPanel game="mines" refreshKey={refresh} pick={pick} locked={open} rtp={gameRtp} />
     </div>
   );
 }

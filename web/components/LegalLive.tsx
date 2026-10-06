@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { api, money } from "@/lib/api";
 import type { Game } from "@/lib/api";
 import type { BonusOffer, VipLevel } from "@/lib/labels";
+import { RULES } from "@/lib/company";
 
 function useLoad<T>(load: () => Promise<T>) {
   const [data, setData] = useState<T | null>(null);
@@ -52,6 +53,40 @@ export function GamesRtpTable() {
       </table>
     </div>
   );
+}
+
+const originals = () => api<{ games: Game[] }>("/api/games").then((r) => r.games.filter((g) => g.provider === "originals"));
+
+/** RTP version and maximum win of each A2 Original, as configured now. */
+export function OriginalsRtpTable() {
+  const { data, error } = useLoad(originals);
+  if (!data || data.length === 0) return <State error={error} empty={!!data} />;
+  return (
+    <div className="table-wrap">
+      <table className="legal-table">
+        <thead><tr><th>Game</th><th className="num">RTP (R)</th><th className="num">House edge</th><th className="num">Maximum win per bet</th></tr></thead>
+        <tbody>
+          {data.map((g) => (
+            <tr key={g.id}>
+              <td>{g.title}</td>
+              <td className="num nowrap">{g.rtp != null ? `${Number(g.rtp).toFixed(0)}%` : "—"}</td>
+              <td className="num nowrap">{g.rtp != null ? `${(100 - Number(g.rtp)).toFixed(0)}%` : "—"}</td>
+              <td className="num nowrap">{g.max_win ? money(g.max_win) : "No cap"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** The maximum win per bet of the A2 Originals in running text (the common value, or "up to" the highest). */
+export function OriginalsMaxWin() {
+  const { data } = useLoad(originals);
+  const caps = (data ?? []).map((g) => g.max_win).filter((x): x is number => !!x);
+  if (caps.length === 0) return <b>{RULES.originalsMaxWin}</b>;
+  const max = Math.max(...caps);
+  return <b>{caps.every((c) => c === max) ? money(max) : `up to ${money(max)} (per game, see the table in section 3)`}</b>;
 }
 
 const kindText: Record<string, string> = { deposit_match: "Deposit bonus", no_deposit: "No-deposit bonus", freespins: "Free spins" };
@@ -183,12 +218,14 @@ export function PaymentMethodsTable() {
 
 type PlinkoTable = { rows: number; risk: string; multipliers: number[]; rtp: number };
 
-/** Plinko payout tables as the server applies them, with each table's theoretical RTP. */
+/** Plinko payout tables as the server applies them now (current RTP version), with each table's theoretical RTP. */
 export function PlinkoTablesLive() {
-  const { data, error } = useLoad(() => api<{ tables: PlinkoTable[] }>("/api/originals/plinko/tables").then((r) => r.tables));
-  if (!data || data.length === 0) return <State error={error} empty={!!data} />;
+  const { data: resp, error } = useLoad(() => api<{ rtp: number; tables: PlinkoTable[] }>("/api/originals/plinko/tables"));
+  const data = resp?.tables;
+  if (!data || data.length === 0) return <State error={error} empty={!!resp} />;
   return (
     <div className="table-wrap">
+      <p className="muted small">Plinko currently runs at the <b>{resp!.rtp}%</b> RTP version.</p>
       <table className="legal-table">
         <thead><tr><th>Rows</th><th>Risk</th><th>Multipliers by slot, left to right</th><th className="num">RTP</th></tr></thead>
         <tbody>

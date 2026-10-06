@@ -12,6 +12,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -21,8 +22,6 @@ import (
 	"github.com/mbobrenko/a2casino/backend/internal/httpx"
 )
 
-const diceEdge = 1.0 // house edge, percent
-
 // DiceRoll returns a number in [0.00, 99.99] as hundredths (0..9999).
 func DiceRoll(serverSeed, clientSeed string, nonce int64) int {
 	m := hmac.New(sha256.New, []byte(serverSeed))
@@ -30,6 +29,10 @@ func DiceRoll(serverSeed, clientSeed string, nonce int64) int {
 	sum := m.Sum(nil)
 	return int(binary.BigEndian.Uint32(sum[:4]) % 10000)
 }
+
+// DiceMultiplier is R × 100 / target (R = rtp/100): a bet under target wins with chance target%,
+// so every target returns exactly R.
+func DiceMultiplier(target float64, rtp int) float64 { return float64(rtp) / target }
 
 func hashSeed(s string) string {
 	h := sha256.Sum256([]byte(s))
@@ -117,12 +120,13 @@ func (s *Service) DiceBet(w http.ResponseWriter, r *http.Request) error {
 	if req.Target < 2 || req.Target > 98 {
 		return httpx.Err(400, "bad_target", "target must be between 2 and 98")
 	}
-	return s.playInstant(w, r, "dice", req.Amount, func(st seedState) (int64, map[string]any) {
-		roll := DiceRoll(st.ServerSeed, st.ClientSeed, st.Nonce)
-		multiplier := (100 - diceEdge) / req.Target
+	return s.playInstant(w, r, "dice", req.Amount, func(p placedBet) (int64, map[string]any) {
+		roll := DiceRoll(p.Seed.ServerSeed, p.Seed.ClientSeed, p.Seed.Nonce)
+		multiplier := DiceMultiplier(req.Target, p.RTP)
 		win := int64(0)
 		if float64(roll)/100 < req.Target {
-			win = int64(float64(req.Amount) * multiplier)
+			// amount × rtp / target, rounded down to the cent (the epsilon absorbs float error).
+			win = int64(math.Floor(float64(req.Amount)*float64(p.RTP)/req.Target + 1e-9))
 		}
 		return win, map[string]any{"roll": float64(roll) / 100, "target": req.Target, "multiplier": multiplier}
 	})

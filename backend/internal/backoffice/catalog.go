@@ -6,6 +6,7 @@ package backoffice
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -17,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/mbobrenko/a2casino/backend/internal/auth"
+	"github.com/mbobrenko/a2casino/backend/internal/games"
 	"github.com/mbobrenko/a2casino/backend/internal/httpx"
 )
 
@@ -105,14 +107,84 @@ func ok(w http.ResponseWriter) { httpx.JSON(w, 200, map[string]any{"ok": true}) 
 
 func (s *Service) Games(w http.ResponseWriter, r *http.Request) error {
 	q := r.URL.Query()
-	return s.list(w, r, "games", `SELECT g.id, g.slug, g.title, g.provider, g.studio, g.category, g.status, g.rtp::float8 AS rtp,
-		g.sort_order, g.is_new, g.blocked_countries, g.tags, g.emoji, g.color, g.wagering_contribution,
+	rows, err := s.Wallet.Pool.Query(r.Context(), `SELECT g.id, g.slug, g.title, g.provider, g.studio, g.category, g.status, g.rtp::float8 AS rtp,
+		g.max_win, (g.provider='originals') AS rtp_configurable, g.sort_order, g.is_new, g.blocked_countries, g.tags, g.emoji, g.color, g.wagering_contribution,
 		COALESCE(st.rounds,0) AS rounds_30d, COALESCE(st.turnover,0) AS turnover_30d, COALESCE(st.ggr,0) AS ggr_30d
 		FROM games g LEFT JOIN (SELECT game_id, count(*) rounds, sum(bet_real+bet_bonus)::BIGINT turnover,
 			sum(bet_real+bet_bonus-win_real-win_bonus)::BIGINT ggr FROM game_rounds
 			WHERE created_at > now() - interval '30 days' AND status<>'rolled_back' AND provider<>'freespins' GROUP BY game_id) st ON st.game_id=g.id
 		WHERE ($1='' OR g.title ILIKE '%'||$1||'%' OR g.slug ILIKE '%'||$1||'%') AND ($2='' OR g.category=$2) AND ($3='' OR g.status=$3)
 		ORDER BY g.sort_order, g.id`, q.Get("q"), q.Get("category"), q.Get("status"))
+	if err != nil {
+		return err
+	}
+	items, err := pgx.CollectRows(rows, pgx.RowToMap)
+	if err != nil {
+		return err
+	}
+	httpx.JSON(w, 200, map[string]any{"games": items, "rtp_presets": games.RTPPresets})
+	return nil
+}
+
+// Limits of the max win per bet an admin can set for an original, in cents.
+const (
+	minMaxWin = 100        // $1
+	maxMaxWin = 1000000000 // $10,000,000
+)
+
+// updateOriginalsMaths changes the RTP and/or the max win of an A2 Original. Admin only, a comment
+// is required and each change is audited with its before and after values (game_rtp_change,
+// game_max_win_change). The new values apply to new bets: bets in flight hold a share lock on the
+// game row (games.placeBet) and an open Mines round keeps what it started with.
+func (s *Service) updateOriginalsMaths(ctx context.Context, tx pgx.Tx, staff auth.Claims, id int64, rtp *int, maxWin *int64, comment string) error {
+	if staff.Role != "admin" {
+		return httpx.Err(403, "forbidden", "only an admin can change the RTP or the max win")
+	}
+	if strings.TrimSpace(comment) == "" {
+		return httpx.Err(400, "comment_required", "a comment is required to change the RTP or the max win")
+	}
+	var slug, provider string
+	var curRTP *float64
+	var curMax *int64
+	err := tx.QueryRow(ctx, `SELECT slug, provider, rtp::float8, max_win FROM games WHERE id=$1 FOR UPDATE`, id).Scan(&slug, &provider, &curRTP, &curMax)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return httpx.Err(404, "not_found", "not found")
+	}
+	if err != nil {
+		return err
+	}
+	if provider != "originals" {
+		return httpx.Err(400, "rtp_not_configurable", "the RTP and max win can only be set for A2 Originals; a provider game's RTP is set by the provider")
+	}
+	if rtp != nil {
+		if !games.ValidRTP(*rtp) {
+			return httpx.Err(400, "bad_rtp", fmt.Sprintf("RTP must be one of %v", games.RTPPresets))
+		}
+		if curRTP == nil || int(*curRTP) != *rtp {
+			if _, err := tx.Exec(ctx, `UPDATE games SET rtp=$2 WHERE id=$1`, id, *rtp); err != nil {
+				return err
+			}
+			if err := auditObj(ctx, tx, staff.Subject, "game_rtp_change", map[string]any{"game_id": id, "slug": slug, "rtp": curRTP},
+				map[string]any{"game_id": id, "slug": slug, "rtp": *rtp}, comment); err != nil {
+				return err
+			}
+		}
+	}
+	if maxWin != nil {
+		if *maxWin < minMaxWin || *maxWin > maxMaxWin {
+			return httpx.Err(400, "bad_max_win", "max win must be between $1 and $10,000,000")
+		}
+		if curMax == nil || *curMax != *maxWin {
+			if _, err := tx.Exec(ctx, `UPDATE games SET max_win=$2 WHERE id=$1`, id, *maxWin); err != nil {
+				return err
+			}
+			if err := auditObj(ctx, tx, staff.Subject, "game_max_win_change", map[string]any{"game_id": id, "slug": slug, "max_win": curMax},
+				map[string]any{"game_id": id, "slug": slug, "max_win": *maxWin}, comment); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 var validGameStatus = map[string]bool{"draft": true, "announced": true, "live": true, "hidden": true, "closed": true}
@@ -134,6 +206,8 @@ func (s *Service) UpdateGame(w http.ResponseWriter, r *http.Request) error {
 		Emoji            *string   `json:"emoji"`
 		Color            *string   `json:"color"`
 		Contribution     *int      `json:"wagering_contribution"`
+		RTP              *int      `json:"rtp"`     // A2 Originals only, admin only: one of games.RTPPresets
+		MaxWin           *int64    `json:"max_win"` // A2 Originals only, admin only: cents per bet
 		Comment          string    `json:"comment"`
 	}
 	if err := httpx.Decode(r, &req); err != nil {
@@ -185,10 +259,24 @@ func (s *Service) UpdateGame(w http.ResponseWriter, r *http.Request) error {
 	if req.Color != nil {
 		p.add("color", *req.Color)
 	}
-	err = s.change(r, "game_update", func(ctx context.Context, tx pgx.Tx) (any, error) {
+	maths := req.RTP != nil || req.MaxWin != nil
+	staff := auth.From(r.Context())
+	err = s.Wallet.InTx(r.Context(), func(tx pgx.Tx) error {
+		ctx := r.Context()
+		if maths {
+			if err := s.updateOriginalsMaths(ctx, tx, staff, id, req.RTP, req.MaxWin, req.Comment); err != nil {
+				return err
+			}
+			if len(p.sets) == 0 {
+				return nil
+			}
+		}
+		if err := p.exec(ctx, tx, "games", "id"); err != nil {
+			return err
+		}
 		p.diff["game_id"] = id
-		return p.diff, p.exec(ctx, tx, "games", "id")
-	}, req.Comment)
+		return auditObj(ctx, tx, staff.Subject, "game_update", nil, p.diff, req.Comment)
+	})
 	if err != nil {
 		return err
 	}

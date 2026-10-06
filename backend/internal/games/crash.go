@@ -28,8 +28,8 @@ func (s *Service) CrashBet(w http.ResponseWriter, r *http.Request) error {
 	if target < CrashMinTarget || target > CrashMaxTarget {
 		return httpx.Err(400, "bad_target", "auto cash-out must be between 1.01x and 1000x")
 	}
-	return s.playInstant(w, r, "crash", req.Amount, func(st seedState) (int64, map[string]any) {
-		crash := CrashPoint(st.ServerSeed, st.ClientSeed, st.Nonce)
+	return s.playInstant(w, r, "crash", req.Amount, func(p placedBet) (int64, map[string]any) {
+		crash := CrashPoint(p.Seed.ServerSeed, p.Seed.ClientSeed, p.Seed.Nonce, p.RTP)
 		win := int64(0)
 		if crash >= target {
 			win = req.Amount * target / 100

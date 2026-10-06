@@ -9,6 +9,7 @@ import Crash from "@/components/originals/Crash";
 import Mines from "@/components/originals/Mines";
 import Plinko from "@/components/originals/Plinko";
 import BetRulesNotice from "@/components/BetRulesNotice";
+import OriginalsInfo from "@/components/originals/OriginalsInfo";
 
 type Launch = { type: "iframe" | "originals"; url?: string; game: Game };
 
@@ -39,14 +40,17 @@ export default function GamePage() {
       {error && <p className="error">{error}</p>}
       {launch && <BetRulesNotice game={launch.game} />}
       {launch?.type === "iframe" && <iframe className="frame" src={launch.url} title={launch.game.title} />}
-      {launch?.type === "originals" && <Original slug={launch.game.slug} />}
+      {launch?.type === "originals" && <OriginalsInfo game={launch.game} />}
+      {launch?.type === "originals" && <Original game={launch.game} />}
     </>
   );
 }
 
-function Original({ slug }: { slug: string }) {
-  if (slug === "crash") return <Crash />;
-  if (slug === "mines") return <Mines />;
-  if (slug === "plinko") return <Plinko />;
-  return <Dice />;
+function Original({ game }: { game: Game }) {
+  const rtp = game.rtp ?? 99;
+  const maxWin = game.max_win ?? 0;
+  if (game.slug === "crash") return <Crash rtp={rtp} maxWin={maxWin} />;
+  if (game.slug === "mines") return <Mines rtp={rtp} maxWin={maxWin} />;
+  if (game.slug === "plinko") return <Plinko rtp={rtp} maxWin={maxWin} />;
+  return <Dice rtp={rtp} maxWin={maxWin} />;
 }

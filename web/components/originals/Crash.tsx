@@ -8,12 +8,12 @@ import FairPanel, { Pick } from "./FairPanel";
 
 type Result = {
   crash_point: number; target: number; cashed_out: boolean; win: number; bet: number;
-  nonce: number; client_seed: string; server_seed_hash: string;
+  nonce: number; client_seed: string; server_seed_hash: string; rtp: number; max_win: number; max_win_applied: boolean;
 };
 
 const W = 320, H = 180;
 
-export default function Crash() {
+export default function Crash({ rtp: initialRtp, maxWin: initialMax }: { rtp: number; maxWin: number }) {
   const [amount, setAmount] = useState("1.00");
   const [target, setTarget] = useState("2.00");
   const [shown, setShown] = useState(1);
@@ -25,11 +25,17 @@ export default function Crash() {
   const [refresh, setRefresh] = useState(0);
   const [pick, setPick] = useState<Pick | null>(null);
   const raf = useRef(0);
+  const [rtp, setRtp] = useState(initialRtp);
+  const [maxWin, setMaxWin] = useState(initialMax);
 
   useEffect(() => () => cancelAnimationFrame(raf.current), []);
 
   const t = parseFloat(target) || 0;
-  const chance = t >= 1.01 ? Math.min(99 / t, 98.02) : 0;
+  // P(crash ≥ t) = R / t; the 1.00x crashes cap it at R / 1.01.
+  const chance = t >= 1.01 ? rtp / t : 0;
+  const stake = Math.round((parseFloat(amount) || 0) * 100);
+  const pays = Math.floor(stake * t);
+  const capped = maxWin > 0 && pays > maxWin;
 
   function animate(r: Result) {
     // Exponential growth, sped up for big crash points so a round lasts at most ~5 seconds.
@@ -59,6 +65,8 @@ export default function Crash() {
     try {
       const r = await api<Result>("/api/originals/crash/bet", { amount: Math.round(parseFloat(amount) * 100), target: Math.round(t * 100) / 100 });
       setResult(r);
+      setRtp(r.rtp);
+      setMaxWin(r.max_win);
       setPhase("flying");
       setShown(1);
       setPoints([]);
@@ -99,9 +107,10 @@ export default function Crash() {
           <label style={{ flex: 1 }}>Auto cash-out, x<input type="number" min="1.01" max="1000" step="0.01" value={target} onChange={(e) => setTarget(e.target.value)} /></label>
         </div>
         <div className="row" style={{ marginTop: 10 }}>
-          <span className="muted small" style={{ flex: 1 }}>Win chance {chance.toFixed(2)}% · pays {money(Math.floor((parseFloat(amount) || 0) * 100 * t))}</span>
+          <span className="muted small" style={{ flex: 1 }}>Win chance {chance.toFixed(2)}% · pays {money(capped ? maxWin : pays)}{capped ? " (maximum win)" : ""} · RTP {rtp}%</span>
           <button className="btn gold" onClick={bet} disabled={phase === "flying"}>Bet</button>
         </div>
+        {capped && <p className="rule-note" role="note" style={{ marginTop: 10 }}>Stake × auto cash-out is {money(pays)}, above the maximum win of {money(maxWin)} per bet: a win pays {money(maxWin)}.</p>}
         {error && <p className="error">{error}</p>}
         {history.length > 0 && (
           <div className="table-wrap">
@@ -117,7 +126,7 @@ export default function Crash() {
           </div>
         )}
       </div>
-      <FairPanel game="crash" refreshKey={refresh} pick={pick} />
+      <FairPanel game="crash" refreshKey={refresh} pick={pick} rtp={rtp} />
     </div>
   );
 }

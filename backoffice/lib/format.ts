@@ -198,6 +198,8 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   bonus_grant: "Выдача бонуса",
   bonus_cancel: "Отмена бонуса",
   game_update: "Игра изменена",
+  game_rtp_change: "RTP игры изменён",
+  game_max_win_change: "Макс. выигрыш игры изменён",
   provider_update: "Провайдер изменён",
   bonus_create: "Бонус создан",
   bonus_update: "Бонус изменён",

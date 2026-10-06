@@ -2,13 +2,13 @@
 // Plinko: the server picks the path; the ball animates along it row by row.
 import { useEffect, useRef, useState } from "react";
 import { api, money } from "@/lib/api";
-import { PLINKO } from "@/lib/fair";
+import { plinkoTable } from "@/lib/fair";
 import { balanceChanged } from "@/lib/useMe";
 import FairPanel, { Pick } from "./FairPanel";
 
 type Result = {
   rows: number; risk: string; path: number[]; slot: number; multiplier: number; win: number; bet: number;
-  nonce: number; client_seed: string; server_seed_hash: string;
+  nonce: number; client_seed: string; server_seed_hash: string; rtp: number; max_win: number; max_win_applied: boolean;
 };
 type Ball = { id: number; r: Result; step: number };
 
@@ -23,7 +23,7 @@ function slotColor(m: number) {
   return "#64748b";
 }
 
-export default function Plinko() {
+export default function Plinko({ rtp: initialRtp, maxWin: initialMax }: { rtp: number; maxWin: number }) {
   const [amount, setAmount] = useState("1.00");
   const [rows, setRows] = useState(12);
   const [risk, setRisk] = useState("medium");
@@ -34,6 +34,8 @@ export default function Plinko() {
   const [refresh, setRefresh] = useState(0);
   const [pick, setPick] = useState<Pick | null>(null);
   const seq = useRef(0);
+  const [rtp, setRtp] = useState(initialRtp);
+  const [maxWin, setMaxWin] = useState(initialMax);
 
   // Advance every ball one row per tick; landed balls are removed and recorded.
   useEffect(() => {
@@ -52,7 +54,10 @@ export default function Plinko() {
   }, [balls]);
 
   const busyBoard = balls.length > 0;
-  const table = PLINKO[rows][risk];
+  const table = plinkoTable(rtp, rows, risk);
+  const stake = Math.round((parseFloat(amount) || 0) * 100);
+  const top_ = Math.max(...table);
+  const capped = maxWin > 0 && Math.floor(stake * top_) > maxWin;
   const s = W / (rows + 2);
   const top = 24;
   const rowH = s * 0.86;
@@ -62,6 +67,8 @@ export default function Plinko() {
     setError("");
     try {
       const r = await api<Result>("/api/originals/plinko/bet", { amount: Math.round(parseFloat(amount) * 100), rows, risk });
+      setRtp(r.rtp);
+      setMaxWin(r.max_win);
       setBalls((bs) => [...bs, { id: ++seq.current, r, step: 0 }]);
       setRefresh((n) => n + 1);
     } catch (e: any) {
@@ -117,6 +124,9 @@ export default function Plinko() {
         <div className="row" style={{ marginTop: 10 }}>
           <button className="btn gold wide" onClick={drop}>Drop ball</button>
         </div>
+        <p className="muted small" style={{ marginTop: 8 }}>
+          RTP {rtp}%{maxWin > 0 && <> · maximum win {money(maxWin)} per bet{capped ? ` (the ${top_}x slot would pay ${money(Math.floor(stake * top_))}: capped)` : ""}</>}
+        </p>
         {error && <p className="error">{error}</p>}
         {history.length > 0 && (
           <div className="table-wrap">
@@ -133,7 +143,7 @@ export default function Plinko() {
           </div>
         )}
       </div>
-      <FairPanel game="plinko" refreshKey={refresh} pick={pick} />
+      <FairPanel game="plinko" refreshKey={refresh} pick={pick} rtp={rtp} />
     </div>
   );
 }

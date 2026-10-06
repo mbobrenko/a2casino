@@ -3,29 +3,35 @@
 // originals), seed rotation and an in-browser verifier (WebCrypto) for any game.
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { crashPoint, diceRoll, minesPositions, PLINKO, plinkoPath, sha256Hex } from "@/lib/fair";
+import { crashPoint, DEFAULT_RTP, diceMultiplier, diceRoll, minesMultiplier, minesPositions, plinkoPath, plinkoTable, RTP_PRESETS, sha256Hex } from "@/lib/fair";
 
 export type Seed = { server_seed_hash: string; client_seed: string; nonce: number; previous_server_seed: string | null };
 export type FairGame = "dice" | "crash" | "mines" | "plinko";
 /** A past result to load into the verifier. */
-export type Pick = { client_seed: string; nonce: number; server_seed_hash?: string; mines?: number; rows?: number; risk?: string };
+export type Pick = {
+  client_seed: string; nonce: number; server_seed_hash?: string; rtp?: number;
+  mines?: number; rows?: number; risk?: string; target?: number; revealed?: number[]; status?: string;
+};
 
 const formulas: Record<FairGame, string> = {
   dice: `HMAC = HMAC-SHA256(server seed, "client seed:nonce")
-roll = (first 4 bytes as uint32 mod 10000) / 100   → win if roll < target`,
+roll = (first 4 bytes as uint32 mod 10000) / 100   → win if roll < target
+multiplier = R × 100 / target   (R = the round's RTP, e.g. 0.99)`,
   crash: `HMAC = HMAC-SHA256(server seed, "client seed:nonce")
 H = first 52 bits (13 hex chars), E = 2^52
-crash = max(1.00, floor(99 × E / (E − H)) / 100)   → win if crash ≥ auto cash-out`,
+crash = max(1.00, floor(RTP × E / (E − H)) / 100)   (RTP in percent, e.g. 99)
+→ win if crash ≥ auto cash-out; P(crash ≥ m) = R / m`,
   mines: `floats: HMAC-SHA256(server seed, "client seed:nonce:cursor"), cursor = 0, 1, …
 each 4 bytes → uint32 / 2^32 (8 floats per HMAC)
 tiles = [0..24]; for i = 24 … 1: j = floor(float × (i + 1)), swap(i, j)
-mines = first N tiles   (tile = row × 5 + column)`,
+mines = first N tiles   (tile = row × 5 + column)
+multiplier after n gems = R × C(25, n) / C(25 − N, n)`,
   plinko: `floats: HMAC-SHA256(server seed, "client seed:nonce:cursor"), cursor = 0, 1, …
 each 4 bytes → uint32 / 2^32; one float per row: ≥ 0.5 = right, else left
-slot = number of rights (0 = far left)   → payout = bet × table[rows][risk][slot]`,
+slot = number of rights (0 = far left)   → payout = bet × table[RTP][rows][risk][slot]`,
 };
 
-export default function FairPanel({ game, refreshKey, locked, pick }: { game: FairGame; refreshKey: number; locked?: boolean; pick?: Pick | null }) {
+export default function FairPanel({ game, refreshKey, locked, pick, rtp }: { game: FairGame; refreshKey: number; locked?: boolean; pick?: Pick | null; rtp?: number }) {
   const [seed, setSeed] = useState<Seed | null>(null);
   const [clientSeed, setClientSeed] = useState("");
   const [error, setError] = useState("");
@@ -65,12 +71,12 @@ export default function FairPanel({ game, refreshKey, locked, pick }: { game: Fa
         </>
       )}
       {error && <p className="error">{error}</p>}
-      <Verifier game={game} revealed={seed?.previous_server_seed ?? ""} pick={pick} />
+      <Verifier game={game} revealed={seed?.previous_server_seed ?? ""} pick={pick} rtp={rtp ?? DEFAULT_RTP} />
     </div>
   );
 }
 
-function Verifier({ game: initial, revealed, pick }: { game: FairGame; revealed: string; pick?: Pick | null }) {
+function Verifier({ game: initial, revealed, pick, rtp: currentRtp }: { game: FairGame; revealed: string; pick?: Pick | null; rtp: number }) {
   const [game, setGame] = useState<FairGame>(initial);
   const [server, setServer] = useState("");
   const [client, setClient] = useState("");
@@ -78,11 +84,15 @@ function Verifier({ game: initial, revealed, pick }: { game: FairGame; revealed:
   const [mines, setMines] = useState(3);
   const [rows, setRows] = useState(16);
   const [risk, setRisk] = useState("medium");
+  const [rtp, setRtp] = useState(currentRtp);
+  const [target, setTarget] = useState("");
+  const [gems, setGems] = useState("");
   const [out, setOut] = useState<{ hash: string; text: string; board?: number[] } | null>(null);
   const [busy, setBusy] = useState(false);
   const [expectHash, setExpectHash] = useState("");
 
   useEffect(() => { if (revealed) setServer(revealed); }, [revealed]);
+  useEffect(() => { if (!pick) setRtp(currentRtp); }, [currentRtp]);
   useEffect(() => {
     if (!pick) return;
     setGame(initial);
@@ -91,6 +101,9 @@ function Verifier({ game: initial, revealed, pick }: { game: FairGame; revealed:
     if (pick.mines) setMines(pick.mines);
     if (pick.rows) setRows(pick.rows);
     if (pick.risk) setRisk(pick.risk);
+    setRtp(pick.rtp ?? DEFAULT_RTP);
+    setTarget(pick.target != null ? String(pick.target) : "");
+    setGems(pick.revealed ? String(pick.revealed.length - (pick.status === "lost" ? 1 : 0)) : "");
     setExpectHash(pick.server_seed_hash ?? "");
     setOut(null);
   }, [pick]);
@@ -102,15 +115,26 @@ function Verifier({ game: initial, revealed, pick }: { game: FairGame; revealed:
       const hash = await sha256Hex(server);
       let text = "";
       let board: number[] | undefined;
-      if (game === "dice") text = `Roll ${(await diceRoll(server, client, n)).toFixed(2)}`;
-      if (game === "crash") text = `Crash point ${(await crashPoint(server, client, n)).toFixed(2)}x`;
+      const tg = parseFloat(target);
+      if (game === "dice") {
+        const roll = await diceRoll(server, client, n);
+        text = `Roll ${roll.toFixed(2)}`;
+        if (tg >= 2 && tg <= 98) text += roll < tg ? ` < ${tg}: win, x${diceMultiplier(tg, rtp).toFixed(4)} at ${rtp}% RTP` : ` ≥ ${tg}: loss`;
+      }
+      if (game === "crash") {
+        const cp = await crashPoint(server, client, n, rtp);
+        text = `Crash point ${cp.toFixed(2)}x at ${rtp}% RTP`;
+        if (tg >= 1.01) text += cp >= tg ? ` ≥ ${tg.toFixed(2)}x: cashed out` : ` < ${tg.toFixed(2)}x: loss`;
+      }
       if (game === "mines") {
         board = await minesPositions(server, client, n, mines);
         text = `Mines at tiles ${[...board].sort((a, b) => a - b).join(", ")}`;
+        const g = parseInt(gems);
+        if (g > 0 && g <= 25 - mines) text += ` · ${g} gems = ${minesMultiplier(mines, g, rtp).toFixed(4)}x at ${rtp}% RTP`;
       }
       if (game === "plinko") {
         const p = await plinkoPath(server, client, n, rows);
-        text = `Path ${p.path.map((b) => (b ? "R" : "L")).join("")} → slot ${p.slot}, ${PLINKO[rows][risk][p.slot]}x`;
+        text = `Path ${p.path.map((b) => (b ? "R" : "L")).join("")} → slot ${p.slot}, ${plinkoTable(rtp, rows, risk)[p.slot]}x at ${rtp}% RTP`;
       }
       setOut({ hash, text, board });
     } catch {
@@ -135,6 +159,15 @@ function Verifier({ game: initial, revealed, pick }: { game: FairGame; revealed:
           </select>
         </label>
         <label>Nonce<input type="number" min={0} value={nonce} onChange={(e) => setNonce(e.target.value)} /></label>
+        <label title="The RTP the bet was played at (shown with each result)">RTP, %
+          <select value={rtp} onChange={(e) => setRtp(Number(e.target.value))}>
+            {RTP_PRESETS.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </label>
+        {(game === "dice" || game === "crash") && (
+          <label>{game === "dice" ? "Target" : "Auto cash-out"}<input type="number" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="optional" /></label>
+        )}
+        {game === "mines" && <label>Gems<input type="number" min={0} max={24} value={gems} onChange={(e) => setGems(e.target.value)} placeholder="optional" /></label>}
         {game === "mines" && (
           <label>Mines<input type="number" min={1} max={24} value={mines} onChange={(e) => setMines(Math.max(1, Math.min(24, Number(e.target.value) || 1)))} /></label>
         )}

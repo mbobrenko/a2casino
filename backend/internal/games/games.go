@@ -48,10 +48,12 @@ type Game struct {
 	Description string   `json:"description"`
 	// Percentage of each bet that counts towards bonus wagering.
 	WageringContribution int `json:"wagering_contribution"`
+	// Maximum win per bet in cents (A2 Originals); null = no cap set by us.
+	MaxWin *int64 `json:"max_win"`
 }
 
 // gameCols matches the Game struct field order (alias g).
-const gameCols = `g.id, g.slug, g.title, g.provider, g.category, g.rtp::float8, g.is_new, g.studio, g.emoji, g.color, g.tags, g.description, g.wagering_contribution`
+const gameCols = `g.id, g.slug, g.title, g.provider, g.category, g.rtp::float8, g.is_new, g.studio, g.emoji, g.color, g.tags, g.description, g.wagering_contribution, g.max_win`
 
 // visibleGames is the WHERE clause for games a player in country $1 may see.
 const visibleGames = `g.status='live' AND NOT ($1 = ANY(g.blocked_countries))
@@ -85,7 +87,7 @@ func (s *Service) Launch(w http.ResponseWriter, r *http.Request) error {
 	var g Game
 	var status string
 	err := s.Wallet.Pool.QueryRow(r.Context(), `SELECT `+gameCols+`, g.status FROM games g WHERE g.slug=$1`,
-		chi.URLParam(r, "slug")).Scan(&g.ID, &g.Slug, &g.Title, &g.Provider, &g.Category, &g.RTP, &g.IsNew, &g.Studio, &g.Emoji, &g.Color, &g.Tags, &g.Description, &g.WageringContribution, &status)
+		chi.URLParam(r, "slug")).Scan(&g.ID, &g.Slug, &g.Title, &g.Provider, &g.Category, &g.RTP, &g.IsNew, &g.Studio, &g.Emoji, &g.Color, &g.Tags, &g.Description, &g.WageringContribution, &g.MaxWin, &status)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && status != "live") {
 		return httpx.Err(404, "game_not_found", "game not found")
 	}

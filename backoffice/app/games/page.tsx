@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import ActionModal from "@/components/ActionModal";
 import { Badge, Codes, StatusBadge, Tags } from "@/components/Badge";
 import Switch from "@/components/Switch";
-import { api, errMsg } from "@/lib/api";
+import { api, errMsg, getStaff } from "@/lib/api";
 import {
   CATEGORIES,
   CATEGORY_LABELS,
@@ -42,7 +42,13 @@ export default function GamesPage() {
 
 /* ---------- games ---------- */
 
-type GameAction = { kind: "toggle"; game: BoGame } | { kind: "edit"; game: BoGame };
+type GameAction =
+  | { kind: "toggle"; game: BoGame }
+  | { kind: "edit"; game: BoGame }
+  | { kind: "rtp"; game: BoGame; rtp: number }
+  | { kind: "max_win"; game: BoGame };
+
+const DEFAULT_RTP_PRESETS = [90, 92, 94, 95, 96, 97, 98, 99];
 
 function GamesView() {
   const [q, setQ] = useState("");
@@ -54,6 +60,9 @@ function GamesView() {
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [action, setAction] = useState<GameAction | null>(null);
+  const [presets, setPresets] = useState<number[]>(DEFAULT_RTP_PRESETS);
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => setIsAdmin(getStaff().role === "admin"), []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -63,8 +72,9 @@ function GamesView() {
       if (query) params.set("q", query);
       if (category) params.set("category", category);
       if (status) params.set("status", status);
-      const r = await api<{ games: BoGame[] | null }>(`/api/bo/games?${params}`);
+      const r = await api<{ games: BoGame[] | null; rtp_presets?: number[] }>(`/api/bo/games?${params}`);
       setRows(r.games || []);
+      if (r.rtp_presets?.length) setPresets(r.rtp_presets);
     } catch (e) {
       setError(errMsg(e));
     } finally {
@@ -142,7 +152,8 @@ function GamesView() {
               <th>Категория</th>
               <th>Статус</th>
               <th title="Быстро показать / скрыть">Live</th>
-              <th className="num">RTP</th>
+              <th className="num" title="A2 Originals: сертифицированная версия RTP, одна для всех игроков. Меняет только администратор">RTP</th>
+              <th className="num" title="A2 Originals: максимальный выигрыш с одной ставки">Макс. выигрыш</th>
               <th className="num" title="Какая доля ставки идёт в отыгрыш бонуса">Вклад в отыгрыш</th>
               <th className="num">Порядок</th>
               <th>Новинка</th>
@@ -183,7 +194,40 @@ function GamesView() {
                     onClick={() => setAction({ kind: "toggle", game: g })}
                   />
                 </td>
-                <td className="num">{g.rtp}%</td>
+                <td className="num">
+                  {g.rtp_configurable ? (
+                    <select
+                      className="cell-input" style={{ width: 72 }}
+                      aria-label={`RTP ${g.title}`}
+                      value={Math.round(g.rtp)}
+                      disabled={!isAdmin}
+                      title={isAdmin ? "Сменить версию RTP (только для новых ставок)" : "Менять RTP может только администратор"}
+                      onChange={(e) => setAction({ kind: "rtp", game: g, rtp: Number(e.target.value) })}
+                    >
+                      {presets.map((p) => (
+                        <option key={p} value={p}>
+                          {p}%
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <>{g.rtp}%</>
+                  )}
+                </td>
+                <td className="num nowrap">
+                  {g.rtp_configurable ? (
+                    <>
+                      {g.max_win ? money(g.max_win) : "—"}{" "}
+                      {isAdmin && (
+                        <button className="btn btn-sm btn-ghost" title="Изменить макс. выигрыш" onClick={() => setAction({ kind: "max_win", game: g })}>
+                          ✎
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </td>
                 <td className={`num${g.wagering_contribution < 100 ? " warn" : ""}`}>{g.wagering_contribution}%</td>
                 <td className="num">{g.sort_order}</td>
                 <td>{g.is_new ? <Badge tone="info">Новинка</Badge> : <span className="muted">—</span>}</td>
@@ -205,14 +249,14 @@ function GamesView() {
             ))}
             {rows && rows.length === 0 && (
               <tr>
-                <td colSpan={16} className="empty">
+                <td colSpan={17} className="empty">
                   Ничего не найдено
                 </td>
               </tr>
             )}
             {!rows && !error && (
               <tr>
-                <td colSpan={16} className="empty">
+                <td colSpan={17} className="empty">
                   Загрузка…
                 </td>
               </tr>
@@ -241,7 +285,73 @@ function GamesView() {
         />
       )}
       {action?.kind === "edit" && <GameEditModal game={action.game} onClose={() => setAction(null)} onDone={done} />}
+      {action?.kind === "rtp" && (
+        <ActionModal
+          title="Изменить RTP"
+          danger
+          description={
+            <>
+              <p>
+                {action.game.emoji} <b>{action.game.title}</b>: RTP <b>{Math.round(action.game.rtp)}%</b> → <b>{action.rtp}%</b> (преимущество
+                казино {100 - Math.round(action.game.rtp)}% → {100 - action.rtp}%).
+              </p>
+              <p className="small">
+                RTP одинаков для всех игроков и применяется только к <b>новым ставкам</b>. Открытые раунды Mines доигрываются по RTP, с которым
+                начаты. Каждый раунд хранит свой RTP, проверка честности использует его. Новое значение сразу публикуется на сайте (страница игры и
+                таблица RTP в правилах). Изменение записывается в журнал аудита.
+              </p>
+              {action.rtp < Math.round(action.game.rtp) && (
+                <p className="small warn">Снижение RTP: убедитесь, что версия {action.rtp}% сертифицирована и согласована с оператором.</p>
+              )}
+            </>
+          }
+          confirmLabel={`Установить ${action.rtp}%`}
+          onClose={() => setAction(null)}
+          onSubmit={async (comment) => {
+            await api(`/api/bo/games/${action.game.id}`, { body: { rtp: action.rtp, comment } });
+            done(`«${action.game.title}»: RTP ${action.rtp}% (для новых ставок)`);
+          }}
+        />
+      )}
+      {action?.kind === "max_win" && <MaxWinModal game={action.game} onClose={() => setAction(null)} onDone={done} />}
     </>
+  );
+}
+
+function MaxWinModal({ game, onClose, onDone }: { game: BoGame; onClose: () => void; onDone: (msg: string) => void }) {
+  const [value, setValue] = useState(game.max_win ? String(game.max_win / 100) : "10000");
+  return (
+    <ActionModal
+      title="Макс. выигрыш с одной ставки"
+      danger
+      description={
+        <>
+          <p>
+            {game.emoji} <b>{game.title}</b>: сейчас {game.max_win ? money(game.max_win) : "без ограничения"}.
+          </p>
+          <p className="small">
+            Выигрыш выше лимита выплачивается в размере лимита, ставка выше лимита не принимается, раунд Mines закрывается автоматически при
+            достижении лимита. Действует для новых ставок; открытый раунд Mines сохраняет свой лимит. Лимит показывается игрокам на странице игры
+            и в правилах. Изменение записывается в журнал аудита.
+          </p>
+        </>
+      }
+      confirmLabel="Сохранить"
+      onClose={onClose}
+      onSubmit={async (comment) => {
+        const dollars = Number(value);
+        if (!Number.isFinite(dollars) || dollars < 1 || dollars > 10000000) throw new Error("Макс. выигрыш — от $1 до $10 000 000");
+        const cents = Math.round(dollars * 100);
+        if (cents === game.max_win) throw new Error("Нет изменений");
+        await api(`/api/bo/games/${game.id}`, { body: { max_win: cents, comment } });
+        onDone(`«${game.title}»: макс. выигрыш ${money(cents)}`);
+      }}
+    >
+      <label className="field">
+        <span>Макс. выигрыш, $</span>
+        <input type="number" min={1} step={1} value={value} onChange={(e) => setValue(e.target.value)} autoFocus />
+      </label>
+    </ActionModal>
   );
 }
 
@@ -266,6 +376,7 @@ function GameEditModal({ game, onClose, onDone }: { game: BoGame; onClose: () =>
       description={
         <span className="muted mono small">
           {game.slug} · {game.studio} · RTP {game.rtp}%
+          {game.rtp_configurable ? " (меняется в таблице, только администратор)" : ""}
         </span>
       }
       confirmLabel="Сохранить"

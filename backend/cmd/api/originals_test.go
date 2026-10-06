@@ -90,7 +90,7 @@ func TestCrashAndPlinko(t *testing.T) {
 		paid += win
 		switch b.path {
 		case "crash":
-			cp := games.CrashPoint(server, seed["client_seed"].(string), int64(i))
+			cp := games.CrashPoint(server, seed["client_seed"].(string), int64(i), 99)
 			if out["crash_point"].(float64) != float64(cp)/100 || (cp >= 200) != (win == 2000) || (cp < 200) != (win == 0) {
 				t.Fatalf("crash %d: %v (crash point %d)", i, out, cp)
 			}
@@ -168,7 +168,7 @@ func TestMines(t *testing.T) {
 		}
 	}
 	out := h.must(200, "/api/originals/mines/reveal", tok, map[string]any{"tile": safe[0]})["round"].(map[string]any)
-	if out["status"] != "open" || num(out["payout"]) != games.MinesPayout(1000, 3, 1) {
+	if out["status"] != "open" || num(out["payout"]) != games.MinesPayout(1000, 3, 1, 99) {
 		t.Fatalf("reveal: %v", out)
 	}
 	h.wantErr(409, "already_revealed", "/api/originals/mines/reveal", tok, map[string]any{"tile": safe[0]})
@@ -180,7 +180,7 @@ func TestMines(t *testing.T) {
 		t.Fatalf("current: %v", cur)
 	}
 	cash := h.must(200, "/api/originals/mines/cashout", tok, map[string]any{})["round"].(map[string]any)
-	want := games.MinesPayout(1000, 3, 2) // 0.99 × C(25,2)/C(22,2) = 1.2857 → $12.85
+	want := games.MinesPayout(1000, 3, 2, 99) // 0.99 × C(25,2)/C(22,2) = 1.2857 → $12.85
 	if cash["status"] != "cashed" || num(cash["win"]) != want || want != 1285 || len(cash["mines_positions"].([]any)) != 3 {
 		t.Fatalf("cashout: %v (want %d)", cash, want)
 	}

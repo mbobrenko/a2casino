@@ -184,6 +184,10 @@ export interface BoGame {
   category: string;
   status: string;
   rtp: number;
+  /** A2 Originals: max win per bet in cents (null = none). */
+  max_win: number | null;
+  /** RTP and max win can be set here (A2 Originals only, admin only). */
+  rtp_configurable: boolean;
   sort_order: number;
   is_new: boolean;
   blocked_countries: string[] | null;

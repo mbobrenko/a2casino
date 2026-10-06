@@ -1,5 +1,5 @@
 import LegalPage, { L, co, legalMetadata, pending } from "@/components/LegalPage";
-import { GamesRtpTable, PlinkoTablesLive } from "@/components/LegalLive";
+import { GamesRtpTable, OriginalsMaxWin, OriginalsRtpTable, PlinkoTablesLive } from "@/components/LegalLive";
 import { RULES } from "@/lib/company";
 
 export const metadata = legalMetadata("game-rules");
@@ -27,11 +27,12 @@ print("%.2f" % (int.from_bytes(h[:4], "big") % 10000 / 100))`;
 const nodeOriginals = `const crypto = require("crypto");
 const hmac = (key, msg) => crypto.createHmac("sha256", key).update(msg).digest();
 const serverSeed = "...", clientSeed = "...", nonce = 0;
+const RTP = 99;            // the RTP the bet was played at, in percent (shown with the result)
 
 // Crash point
 const H = BigInt("0x" + hmac(serverSeed, clientSeed + ":" + nonce).toString("hex").slice(0, 13));
 const E = 2n ** 52n;
-let c = (99n * E) / (E - H);
+let c = (BigInt(RTP) * E) / (E - H);
 console.log("crash", Number(c < 100n ? 100n : c) / 100);
 
 // Float stream for Mines and Plinko
@@ -71,7 +72,7 @@ export default function GameRules() {
             <p>A bet is placed when it is accepted by our server and the stake has been taken from your balance. Stakes are taken from the real balance first and then from the bonus balance; wins are credited in the same proportion (see the <L to="bonus-terms" />).</p>,
             <p><b>Malfunction voids all pays and plays.</b> If a game or system error affects a round, the bets and wins in that round are void. If a round cannot be completed, the provider may cancel it and the stake is refunded; the bet is shown as &quot;voided&quot; in your history.</p>,
             <p>If you are disconnected during a round, the round is completed on the server according to the game&apos;s rules. Your bet history shows the outcome.</p>,
-            <p>The maximum win is {pending.maxWin}, or the lower limit set in a game&apos;s own rules.</p>,
+            <p><b>Maximum win.</b> For A2 Originals (Dice, Crash, Mines and Plinko) the maximum win is <OriginalsMaxWin /> per bet (see section 3): a win above it is paid at the maximum. For third-party games the maximum win is {pending.maxWin}, or the lower limit set in a game&apos;s own rules.</p>,
             <p>Minimum and maximum stakes are shown in each game. Game availability depends on your country: some games and studios are not available in some countries and are hidden there.</p>,
             <p>We may add, change or withdraw games at any time. Unfinished rounds of a withdrawn game are settled or refunded.</p>,
           ],
@@ -87,13 +88,23 @@ export default function GameRules() {
           after: <GamesRtpTable />,
         },
         {
+          title: "A2 Originals: RTP versions and maximum win",
+          lead: <p>Our own games can be run at one of several published RTP versions: <b>90%, 92%, 94%, 95%, 96%, 97%, 98% or 99%</b>. The version is chosen per game by the operator and is shown on each game&apos;s page, in the RTP table above and below. In the rules below, <b>R</b> is that RTP as a fraction (for example R = 0.99 for 99%, 0.96 for 96%) and the house edge is 1 − R.</p>,
+          items: [
+            <p><b>The same for everyone, fixed in advance.</b> The RTP of a game is the same for every player and every bet. It is never adjusted for an individual player, a session, a balance, past results or any other circumstance, and it does not change during play. It can only be changed by an authorised administrator as a configuration of the game; every change is recorded in our audit log.</p>,
+            <p><b>A change applies to new bets only.</b> A bet is always settled at the RTP shown when it was placed. A Mines round in progress keeps the RTP and the maximum win it was started with until it ends. Every result, in the game and in your bet history, records the RTP it was played at, and the provably fair verification uses that RTP.</p>,
+            <p><b>Maximum win per bet.</b> A single bet in an A2 Original can win at most the amount shown below and on the game page (currently <OriginalsMaxWin /> unless shown otherwise). A win above it is paid at the maximum win; a stake above the maximum win is not accepted. In Mines, the round is cashed out automatically as soon as the payout reaches the maximum win. The maximum win applies to the total payout of the bet, stake included.</p>,
+          ],
+          after: <OriginalsRtpTable />,
+        },
+        {
           title: "Dice (A2 Originals)",
           lead: <p>Dice is our own game. You choose a target number; a number from 0.00 to 99.99 is rolled, and you win if the roll is <b>below</b> your target.</p>,
           items: [
             <p><b>Target and chance.</b> The target can be set between 2 and 98. The chance of winning in percent equals the target: a target of 50 wins with a roll of 0.00 to 49.99, which is 5,000 of the 10,000 possible rolls (50%).</p>,
-            <p><b>Payout.</b> The payout multiplier is <code>99 / target</code>. A winning bet pays stake × multiplier, rounded down to the cent; a losing bet pays nothing. Example: $1.00 at target 50 pays x1.98, i.e. $1.98.</p>,
-            <p><b>House edge and RTP.</b> Because the multiplier is 99 / target, the expected return is 99% at every target: the house edge is 1% and the RTP is 99%.</p>,
-            <p><b>Stakes.</b> The minimum bet is {RULES.minDiceBet}. The maximum bet is {pending.maxDiceBet}, and is never more than your available balance.</p>,
+            <p><b>Payout.</b> The payout multiplier is <code>R × 100 / target</code>. A winning bet pays stake × multiplier, rounded down to the cent and up to the maximum win; a losing bet pays nothing. Example at 99% RTP: $1.00 at target 50 pays x1.98, i.e. $1.98; at 96% RTP it pays x1.92.</p>,
+            <p><b>House edge and RTP.</b> The chance of winning is target / 100, so the expected return is target / 100 × R × 100 / target = <b>R</b> at every target: the RTP is R and the house edge is 1 − R (1% at 99% RTP).</p>,
+            <p><b>Stakes.</b> The minimum bet is {RULES.minDiceBet}. The maximum bet is {pending.maxDiceBet}, and is never more than the maximum win per bet or your available balance.</p>,
             <p>While you have an active bonus, the maximum bet of the <L to="bonus-terms" /> applies (normally $5.00 per roll). Bets on Dice count only partly towards bonus wagering (see the wagering contribution table in the <L to="bonus-terms" />); real-money bets count in full towards VIP points.</p>,
           ],
         },
@@ -130,10 +141,10 @@ roll = (first 4 bytes of HMAC as an unsigned big-endian integer mod 10000) / 100
               <p><b>Crash point.</b></p>
               <pre><code>{`HMAC = HMAC-SHA256(key = server seed, message = "client seed:nonce")
 H = the first 52 bits of HMAC (first 13 hex characters), E = 2^52
-crash point = max(1.00, floor(99 × E / (E − H)) / 100)`}</code></pre>
-              <p>With this formula the chance that the crash point reaches a multiplier m is 99% ÷ m (for example 49.5% for 2.00x, 9.9% for 10.00x). About 1.98% of rounds end at 1.00x.</p>
+crash point = max(1.00, floor(RTP × E / (E − H)) / 100)      (RTP in percent, e.g. 99)`}</code></pre>
+              <p>With this formula the chance that the crash point reaches a multiplier m is R ÷ m (at 99% RTP: 49.5% for 2.00x, 9.9% for 10.00x; at 96%: 48% and 9.6%). A share 1 − R ÷ 1.01 of rounds ends at 1.00x (about 1.98% at 99% RTP).</p>
             </>,
-            <p><b>House edge and RTP.</b> The expected return is m × 0.99 ÷ m = <b>99%</b> for every auto cash-out: the house edge is 1% and the RTP is 99%.</p>,
+            <p><b>House edge and RTP.</b> The expected return is m × R ÷ m = <b>R</b> for every auto cash-out: the RTP is R and the house edge is 1 − R. The payout is capped at the maximum win per bet.</p>,
             <p><b>Stakes.</b> The minimum bet is {RULES.minDiceBet}. While a bonus is active its maximum bet applies (normally $5.00 per bet); Crash counts 10% towards bonus wagering by default (see the <L to="bonus-terms" />).</p>,
           ],
         },
@@ -143,10 +154,10 @@ crash point = max(1.00, floor(99 × E / (E − H)) / 100)`}</code></pre>
           items: [
             <>
               <p><b>Multiplier.</b> After n safe tiles with M mines the multiplier is:</p>
-              <pre><code>{`multiplier = 0.99 × C(25, n) / C(25 − M, n)`}</code></pre>
-              <p>C(a, b) is the number of ways to choose b tiles out of a. Example: 3 mines, 2 gems = 0.99 × 300 / 231 = 1.2857x; 24 mines, 1 gem = 24.75x. The payout is stake × multiplier, rounded down to the cent. When every safe tile is revealed the round is cashed out automatically.</p>
+              <pre><code>{`multiplier = R × C(25, n) / C(25 − M, n)`}</code></pre>
+              <p>C(a, b) is the number of ways to choose b tiles out of a. Example at 99% RTP: 3 mines, 2 gems = 0.99 × 300 / 231 = 1.2857x; 24 mines, 1 gem = 24.75x (24x at 96%). The payout is stake × multiplier, rounded down to the cent, up to the maximum win per bet. When every safe tile is revealed, or the payout reaches the maximum win, the round is cashed out automatically.</p>
             </>,
-            <p><b>House edge and RTP.</b> The chance of finding n safe tiles in a row is C(25 − M, n) / C(25, n), so cashing out at any point returns <b>99%</b> on average: the house edge is 1% and the RTP is 99% for every number of mines.</p>,
+            <p><b>House edge and RTP.</b> The chance of finding n safe tiles in a row is C(25 − M, n) / C(25, n), so cashing out at any point returns <b>R</b> on average: the RTP is R and the house edge is 1 − R for every number of mines. The theoretical multipliers with many mines and gems are very large (millions), so the maximum win per bet effectively limits them; because of the cap, the return of a strategy whose payout would exceed it is lower than R.</p>,
             <>
               <p><b>Mine positions.</b> Tiles are numbered 0 to 24, row by row (tile = row × 5 + column). The mines are fixed when the bet is placed:</p>
               <pre><code>{`float stream: HMAC-SHA256(server seed, "client seed:nonce:cursor") for cursor = 0, 1, 2, …
@@ -170,7 +181,7 @@ row k: float ≥ 0.5 → right, otherwise left
 slot = number of right bounces (0 = far left)`}</code></pre>
               <p>The chance of landing in slot k is C(rows, k) / 2^rows, so the middle slots are hit most often.</p>
             </>,
-            <p><b>Payout tables and RTP.</b> The payout is stake × the slot&apos;s multiplier, rounded down to the cent. The RTP of a table is the sum over all slots of C(rows, k) / 2^rows × multiplier; every table returns between 98.9% and 99.2% (house edge about 1%). The tables below are loaded live from the game server.</p>,
+            <p><b>Payout tables and RTP.</b> The payout is stake × the slot&apos;s multiplier, rounded down to the cent, up to the maximum win per bet. The RTP of a table is the sum over all slots of C(rows, k) / 2^rows × multiplier. Each RTP version has its own tables: the 99% tables return between 98.9% and 99.2%; the tables of the other versions are the 99% tables scaled to the version&apos;s RTP and rounded to 0.01x, then adjusted by 0.01x on matching slots until the table returns the version&apos;s RTP (within 0.01%), keeping the same shape. The tables below, for the RTP Plinko runs at now, are loaded live from the game server; the in-game verifier rebuilds the tables of any version in your browser.</p>,
             <p><b>Stakes.</b> The minimum bet is {RULES.minDiceBet}. While a bonus is active its maximum bet applies; Plinko counts 10% towards bonus wagering by default.</p>,
           ],
           after: <PlinkoTablesLive />,
@@ -178,7 +189,7 @@ slot = number of right bounces (0 = far left)`}</code></pre>
         {
           title: "Verifying Crash, Mines and Plinko",
           items: [
-            <p>Use the &quot;Verify a result&quot; section on the game page, or recompute the results yourself after rotating the seed pair, for example in Node.js:</p>,
+            <p>Use the &quot;Verify a result&quot; section on the game page (choose the RTP the bet was played at, shown with the result), or recompute the results yourself after rotating the seed pair, for example in Node.js:</p>,
             <pre><code>{nodeOriginals}</code></pre>,
           ],
         },

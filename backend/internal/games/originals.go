@@ -21,7 +21,8 @@ import (
 // MinOriginalsBet is the minimum stake in every original, in cents.
 const MinOriginalsBet = 10
 
-// placedBet is a bet that has been charged; Seed holds the seed pair and the nonce it used.
+// placedBet is a bet that has been charged; Seed holds the seed pair and the nonce it used, RTP
+// (percent) and MaxWin (cents, 0 = no cap) the game's configuration at the moment of the bet.
 type placedBet struct {
 	Slug    string
 	GameID  int64
@@ -29,6 +30,8 @@ type placedBet struct {
 	Amount  int64
 	Real    int64
 	Bonus   int64
+	RTP     int
+	MaxWin  int64
 	Seed    seedState
 }
 
@@ -42,8 +45,17 @@ func checkAmount(amount int64) error {
 // placeBet charges a bet on an original inside tx and advances the player's nonce.
 func (s *Service) placeBet(ctx context.Context, tx pgx.Tx, pid uuid.UUID, slug string, amount int64) (placedBet, error) {
 	p := placedBet{Slug: slug, Amount: amount}
-	if err := tx.QueryRow(ctx, `SELECT id FROM games WHERE slug=$1 AND status='live'`, slug).Scan(&p.GameID); err != nil {
+	// FOR SHARE: a concurrent RTP change in the back office waits for the bets in flight, so a bet
+	// is always paid at the RTP it records.
+	if err := tx.QueryRow(ctx, `SELECT id, COALESCE(rtp, 99)::int, COALESCE(max_win, 0) FROM games WHERE slug=$1 AND status='live' FOR SHARE`, slug).
+		Scan(&p.GameID, &p.RTP, &p.MaxWin); err != nil {
 		return p, httpx.Err(404, "game_not_found", slug+" is not available")
+	}
+	if !ValidRTP(p.RTP) {
+		return p, fmt.Errorf("game %s has RTP %d, not a preset", slug, p.RTP)
+	}
+	if p.MaxWin > 0 && amount > p.MaxWin {
+		return p, httpx.Err(400, "bet_too_high", fmt.Sprintf("the maximum bet is the maximum win of $%.2f", float64(p.MaxWin)/100))
 	}
 	if err := s.Promo.CheckBet(ctx, tx, pid, amount); err != nil {
 		return p, err
@@ -76,7 +88,8 @@ func (s *Service) placeBet(ctx context.Context, tx pgx.Tx, pid uuid.UUID, slug s
 
 // fairDetails are the provably fair fields stored with every round and returned to the player.
 func (p placedBet) fairDetails() map[string]any {
-	return map[string]any{"game": p.Slug, "nonce": p.Seed.Nonce, "client_seed": p.Seed.ClientSeed, "server_seed_hash": hashSeed(p.Seed.ServerSeed)}
+	return map[string]any{"game": p.Slug, "rtp": p.RTP, "max_win": p.MaxWin,
+		"nonce": p.Seed.Nonce, "client_seed": p.Seed.ClientSeed, "server_seed_hash": hashSeed(p.Seed.ServerSeed)}
 }
 
 // creditWin pays a win in the same real/bonus proportion as the stake; returns the bonus part.
@@ -90,9 +103,10 @@ func (s *Service) creditWin(ctx context.Context, tx pgx.Tx, pid uuid.UUID, slug,
 }
 
 // playInstant runs a single-step original (Dice, Crash, Plinko): play computes the payout and the
-// round details from the seed pair; the round is recorded as settled in game_rounds.
+// round details from the seed pair at the bet's RTP; the win is capped at the game's max win and
+// the round is recorded as settled in game_rounds.
 func (s *Service) playInstant(w http.ResponseWriter, r *http.Request, slug string, amount int64,
-	play func(st seedState) (win int64, details map[string]any)) error {
+	play func(p placedBet) (win int64, details map[string]any)) error {
 	pid := auth.From(r.Context()).Subject
 	if err := checkAmount(amount); err != nil {
 		return err
@@ -107,10 +121,12 @@ func (s *Service) playInstant(w http.ResponseWriter, r *http.Request, slug strin
 		if err != nil {
 			return err
 		}
-		win, details := play(p.Seed)
+		win, details := play(p)
 		for k, v := range p.fairDetails() {
 			details[k] = v
 		}
+		win, capped := capWin(win, p.MaxWin)
+		details["max_win_applied"] = capped
 		winBonus, err := s.creditWin(ctx, tx, pid, slug, p.RoundID, amount, p.Bonus, win)
 		if err != nil {
 			return err

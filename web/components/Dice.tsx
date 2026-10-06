@@ -3,10 +3,14 @@ import { useState } from "react";
 import { api, money } from "@/lib/api";
 import { balanceChanged } from "@/lib/useMe";
 import FairPanel, { Pick } from "@/components/originals/FairPanel";
+import { diceMultiplier } from "@/lib/fair";
 
-type Result = { roll: number; target: number; multiplier: number; win: number; nonce: number; client_seed: string; server_seed_hash: string };
+type Result = {
+  roll: number; target: number; multiplier: number; win: number; nonce: number; client_seed: string; server_seed_hash: string;
+  rtp: number; max_win: number; max_win_applied: boolean;
+};
 
-export default function Dice() {
+export default function Dice({ rtp: initialRtp, maxWin: initialMax }: { rtp: number; maxWin: number }) {
   const [amount, setAmount] = useState("1.00");
   const [target, setTarget] = useState(50);
   const [result, setResult] = useState<Result | null>(null);
@@ -15,8 +19,13 @@ export default function Dice() {
   const [busy, setBusy] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const [pick, setPick] = useState<Pick | null>(null);
+  // The RTP and cap shown follow the last result (a change in the back office applies to the next bet).
+  const [rtp, setRtp] = useState(initialRtp);
+  const [maxWin, setMaxWin] = useState(initialMax);
 
-  const multiplier = 99 / target;
+  const multiplier = diceMultiplier(target, rtp);
+  const stake = Math.round((parseFloat(amount) || 0) * 100);
+  const capped = maxWin > 0 && Math.floor(stake * multiplier) > maxWin;
 
   async function roll() {
     setBusy(true);
@@ -24,6 +33,8 @@ export default function Dice() {
     try {
       const r = await api<Result>("/api/originals/dice/bet", { amount: Math.round(parseFloat(amount) * 100), target });
       setResult(r);
+      setRtp(r.rtp);
+      setMaxWin(r.max_win);
       setHistory((h) => [r, ...h].slice(0, 10));
       balanceChanged();
       setRefresh((n) => n + 1);
@@ -40,7 +51,7 @@ export default function Dice() {
           {result ? result.roll.toFixed(2) : "—"}
         </div>
         <p className="muted" style={{ textAlign: "center" }}>
-          {result ? (result.win > 0 ? `You won ${money(result.win)}` : "No luck this time") : "Win if the roll is under the target"}
+          {result ? (result.win > 0 ? `You won ${money(result.win)}${result.max_win_applied ? " (maximum win)" : ""}` : "No luck this time") : "Win if the roll is under the target"}
         </p>
         <label>Target: under {target}
           <input type="range" min={2} max={98} value={target} onChange={(e) => setTarget(Number(e.target.value))} />
@@ -48,7 +59,9 @@ export default function Dice() {
         <div className="tiles" style={{ marginTop: 12 }}>
           <div className="tile"><div className="muted">Win chance</div><div className="v">{target}%</div></div>
           <div className="tile"><div className="muted">Multiplier</div><div className="v">x{multiplier.toFixed(4)}</div></div>
+          <div className="tile"><div className="muted">RTP</div><div className="v">{rtp}%</div></div>
         </div>
+        {capped && <p className="rule-note" role="note">This bet could win {money(Math.floor(stake * multiplier))}, above the maximum win of {money(maxWin)} per bet: a win pays {money(maxWin)}.</p>}
         <div className="row">
           <label style={{ flex: 1 }}>Bet, $<input type="number" min="0.1" step="0.1" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
           <button className="btn gold" onClick={roll} disabled={busy}>Roll</button>
@@ -68,7 +81,7 @@ export default function Dice() {
           </div>
         )}
       </div>
-      <FairPanel game="dice" refreshKey={refresh} pick={pick} />
+      <FairPanel game="dice" refreshKey={refresh} pick={pick} rtp={rtp} />
     </div>
   );
 }

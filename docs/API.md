@@ -13,7 +13,7 @@ For local testing the player's network country can be faked with the `X-Country:
 | POST | `/api/auth/login` | `{email, password}` | `{token, player_id}` |
 | GET | `/api/me` | | `{id, email, country, currency, status, verification, created_at, balance: {currency, real, bonus, locked}, exclusion}`; `exclusion` is the active time-out / self-exclusion (see below) or null; `verification` is new / not_verified / pending / manual_review / duplicate / verified |
 | GET | `/api/wallet/transactions?limit=` | | `{items: [{id, type, amount, meta, created_at}]}`; `amount` is the signed change of real + bonus |
-| GET | `/api/games?category=&studio=&q=&tag=` | (no auth) | `{categories: [...], games: [Game]}`; Game = `{id, slug, title, provider, category, rtp, is_new, studio, emoji, color, tags[], description, wagering_contribution}` (percent of each bet counted towards bonus wagering) |
+| GET | `/api/games?category=&studio=&q=&tag=` | (no auth) | `{categories: [...], games: [Game]}`; Game = `{id, slug, title, provider, category, rtp, is_new, studio, emoji, color, tags[], description, wagering_contribution, max_win}` (wagering_contribution: percent of each bet counted towards bonus wagering; rtp: for originals the RTP version the game runs at now; max_win: originals' maximum win per bet in cents, null = none) |
 | GET | `/api/lobby` | (auth optional) | `{banners: [{id, title, subtitle, cta_text, cta_link, color, emoji}], categories: [{code, title, games}], providers: [{code, title, games}], popular: [Game], new: [Game], recommended: [Game], recent: [Game]}`; recommended/recent are personal when a player token is sent |
 | GET | `/api/profile` | | `/api/me` fields + `vip` (as in `/api/vip` status) + `stats: {bets, bet_sum, wins, win_sum, deposits, deposit_sum, withdrawals, withdrawal_sum}` |
 | GET | `/api/rounds?limit=` | | bet history `{items: [{id, game, emoji, provider, bet, win, status, created_at}]}` |
@@ -29,10 +29,10 @@ For local testing the player's network country can be faked with the `X-Country:
 | POST | `/api/games/{slug}/launch` | | `{type: "iframe", url, game}` or `{type: "originals", game}` |
 | GET | `/api/originals/seed` (alias `/api/originals/dice/seed`) | | `{server_seed_hash, client_seed, nonce, previous_server_seed}`: the seed pair shared by all originals |
 | POST | `/api/originals/seed` (alias `/api/originals/dice/seed`) | `{client_seed?}` | new seed pair, nonce 0; reveals the previous server seed; 409 `round_open` while a Mines round is open |
-| POST | `/api/originals/dice/bet` | `{amount, target}` (win if roll < target, 2..98) | `{game, roll, target, multiplier, bet, win, nonce, client_seed, server_seed_hash, balance}`; 400 `max_bet_exceeded` above the active bonus's max bet |
-| POST | `/api/originals/crash/bet` | `{amount, target}` (auto cash-out 1.01..1000, two decimals) | `{game, crash_point, target, cashed_out, bet, win, nonce, client_seed, server_seed_hash, balance}`; settles at once, win = amount × target when crash_point ≥ target; 400 `bad_target` |
-| POST | `/api/originals/plinko/bet` | `{amount, rows: 8/12/16, risk: low/medium/high}` | `{game, rows, risk, path: [0/1 per row, 1 = right], slot, multiplier, bet, win, nonce, client_seed, server_seed_hash, balance}`; 400 `bad_rows` / `bad_risk` |
-| GET | `/api/originals/plinko/tables` | (no auth) | `{tables: [{rows, risk, multipliers[], rtp}]}` |
+| POST | `/api/originals/dice/bet` | `{amount, target}` (win if roll < target, 2..98) | `{game, roll, target, multiplier, bet, win, rtp, max_win, max_win_applied, nonce, client_seed, server_seed_hash, balance}`; 400 `max_bet_exceeded` above the active bonus's max bet |
+| POST | `/api/originals/crash/bet` | `{amount, target}` (auto cash-out 1.01..1000, two decimals) | `{game, crash_point, target, cashed_out, bet, win, rtp, max_win, max_win_applied, nonce, client_seed, server_seed_hash, balance}`; settles at once, win = amount × target (capped at max_win) when crash_point ≥ target; 400 `bad_target` |
+| POST | `/api/originals/plinko/bet` | `{amount, rows: 8/12/16, risk: low/medium/high}` | `{game, rows, risk, path: [0/1 per row, 1 = right], slot, multiplier, bet, win, rtp, max_win, max_win_applied, nonce, client_seed, server_seed_hash, balance}`; 400 `bad_rows` / `bad_risk` |
+| GET | `/api/originals/plinko/tables?rtp=&all=` | (no auth) | `{rtp, current_rtp, presets: [90, …, 99], tables: [{rows, risk, multipliers[], rtp}], by_rtp?}`: the tables of the RTP Plinko runs at now (`current_rtp`), or of the preset in `?rtp=` (400 `bad_rtp`); `?all=1` adds `by_rtp: {"90": [tables], …}` |
 | POST | `/api/originals/mines/start` | `{amount, mines: 1..24}` | `{round: MinesRound, balance}`; 409 `round_open` (one open round per player), 400 `bad_mines` |
 | POST | `/api/originals/mines/reveal` | `{tile: 0..24}` (row × 5 + column) | `{round, balance}`; a mine ends the round (`status: lost`); revealing the last safe tile cashes out automatically; 409 `no_round` / `already_revealed`, 400 `bad_tile` |
 | POST | `/api/originals/mines/cashout` | | `{round, balance}`; pays `round.payout`; 409 `no_round` / `nothing_revealed` |
@@ -45,26 +45,41 @@ For local testing the player's network country can be faked with the `X-Country:
 
 ### A2 Originals (provably fair)
 
-Dice, Crash, Mines and Plinko (`provider: originals`, studio "A2 Originals", RTP 99%) share **one seed pair per player**
+Dice, Crash, Mines and Plinko (`provider: originals`, studio "A2 Originals") share **one seed pair per player**
 (`fair_seeds`): the server seed's SHA-256 is shown before betting, the nonce goes up by one with every bet in any of the
 four games, and rotating the pair reveals the previous server seed. All results use HMAC-SHA256 with the server seed
 (as text) as the key; the formulas live in `backend/internal/games/fair.go` and `web/lib/fair.ts` (in-browser verifier):
 
-- Dice: `HMAC(server, "client:nonce")`, first 4 bytes as uint32 `% 10000 / 100`; pays `amount × 99 / target`.
-- Crash: H = first 52 bits of `HMAC(server, "client:nonce")`, E = 2^52, `crash = max(1.00, floor(99·E / (E − H)) / 100)`,
-  so P(crash ≥ m) = 0.99 / m and every auto cash-out returns 99%. Single player, no manual cash-out (the site animates the result).
+- Dice: `HMAC(server, "client:nonce")`, first 4 bytes as uint32 `% 10000 / 100`; pays `amount × RTP / target` (RTP in percent).
+- Crash: H = first 52 bits of `HMAC(server, "client:nonce")`, E = 2^52, `crash = max(1.00, floor(RTP·E / (E − H)) / 100)`,
+  so P(crash ≥ m) = R / m and every auto cash-out returns R. Single player, no manual cash-out (the site animates the result).
 - Float stream (Mines, Plinko): `HMAC(server, "client:nonce:cursor")` for cursor 0, 1, …; every 4 bytes → uint32 / 2^32.
 - Mines: Fisher–Yates over tiles 0..24 (`for i = 24..1: j = floor(f × (i+1)); swap`), the first `mines` tiles are mines.
-  Multiplier after n gems = `0.99 × C(25, n) / C(25 − mines, n)`, payout rounded down to the cent.
-- Plinko: one float per row, `≥ 0.5` = right; slot = number of rights; pays the slot of the rows/risk table
-  (`/api/originals/plinko/tables`, RTP 98.9–99.2%).
+  Multiplier after n gems = `R × C(25, n) / C(25 − mines, n)`, payout rounded down to the cent.
+- Plinko: one float per row, `≥ 0.5` = right; slot = number of rights; pays the slot of the rows/risk table of the
+  round's RTP (`/api/originals/plinko/tables`). The 99% tables (RTP 98.9–99.2%) are the base; the other versions scale
+  them to the target in integer hundredths (round half up), then add/take 0.01x on symmetric slot pairs (closest to the
+  target first, keeping ≥ 0.01x and non-increasing towards the centre) until the sum is as close as it gets: every
+  derived table returns its RTP within 0.01 pp (`backend/internal/games/plinko_tables.go`, same algorithm in `web/lib/fair.ts`).
+
+**RTP versions (B2B).** Each original runs at one of the presets **90, 92, 94, 95, 96, 97, 98, 99** % (R = RTP / 100),
+stored in `games.rtp` (default 99; a CHECK constraint allows only the presets for originals). It is the same for every
+player and is never adjusted per player or dynamically: only an admin changes it in the back office (comment required,
+audit `game_rtp_change`). A change applies to new bets only: a bet reads the game row with a share lock, every round stores
+the RTP it used (`game_rounds.details.rtp`, each result's `rtp`), and an open Mines round keeps the RTP it started with
+(`mines_rounds.rtp`). Verification uses the round's RTP.
+
+**Max win per bet.** `games.max_win` (cents, default $10,000 for originals, admin only, audit `game_max_win_change`).
+A payout above it is paid at max_win (`max_win_applied: true` in the result and `details`); a stake above it is refused
+with 400 `bet_too_high`; a Mines round whose payout reaches it is cashed out automatically (`max_win_reached`). An open
+Mines round keeps the cap it started with (`mines_rounds.max_win`).
 
 Every original: min bet $0.10, the active bonus's max bet (400 `max_bet_exceeded`), RG checks (403 `timeout`,
 `self_excluded`, `loss_limit`, `wager_limit`, `session_limit`), wagering contribution 10% by default (editable per game in
 the back office), VIP points / rakeback on the real-money part. Rounds are recorded in `game_rounds` (provider `originals`,
 `details` holds the result and the seed fields) and show in `/api/rounds` and the back-office bet log.
 
-MinesRound = `{id, bet, mines, revealed: [tile], status: open/lost/cashed, win, multiplier, next_multiplier?, payout,
+MinesRound = `{id, bet, mines, revealed: [tile], status: open/lost/cashed, win, multiplier, next_multiplier?, payout, rtp, max_win, max_win_reached,
 mines_positions? (only once the round is over), nonce, client_seed, server_seed_hash, created_at}`. The stake is taken at
 start (the game_rounds row is `open` until the round ends). Reveal and cash-out are allowed during a time-out /
 self-exclusion so an open round can be finished. A round left open for 24 hours is cashed out by a background task
@@ -138,8 +153,8 @@ up to 5 MB, the type is checked by content (magic bytes). Files are private: ser
 | GET | `/api/bo/players/{id}/bonuses` | | player's bonuses (same shape as `/api/bonuses`) |
 | POST | `/api/bo/players/{id}/bonuses` | `{bonus_id, comment}` | marketing/admin: give a bonus |
 | POST | `/api/bo/players/{id}/bonuses/{pb}/cancel` | `{comment}` | marketing/admin |
-| GET | `/api/bo/games?q=&category=&status=` | | `{games: [{id, slug, title, provider, studio, category, status, rtp, sort_order, is_new, blocked_countries, tags, emoji, color, wagering_contribution, rounds_30d, turnover_30d, ggr_30d}]}` |
-| POST | `/api/bo/games/{id}` | any of `{title, category, status: live/hidden/draft/announced/closed, sort_order, is_new, blocked_countries[], tags[], emoji, color, wagering_contribution (0–100), comment}` | marketing/admin |
+| GET | `/api/bo/games?q=&category=&status=` | | `{games: [{id, slug, title, provider, studio, category, status, rtp, max_win, rtp_configurable, sort_order, is_new, blocked_countries, tags, emoji, color, wagering_contribution, rounds_30d, turnover_30d, ggr_30d}], rtp_presets: [90, …, 99]}` |
+| POST | `/api/bo/games/{id}` | any of `{title, category, status: live/hidden/draft/announced/closed, sort_order, is_new, blocked_countries[], tags[], emoji, color, wagering_contribution (0–100), rtp, max_win, comment}` | marketing/admin. `rtp` (a preset) and `max_win` (cents, $1–$10,000,000) are **admin only** (403 `forbidden`), originals only (400 `rtp_not_configurable`), need a comment (400 `comment_required`), 400 `bad_rtp` / `bad_max_win`; audited as `game_rtp_change` / `game_max_win_change` with before and after |
 | GET / POST | `/api/bo/providers`, `/api/bo/providers/{code}` | `{status: live/hidden, blocked_countries[], sort_order, comment}` | a hidden provider hides all its games |
 | GET | `/api/bo/bonuses` | | Bonus fields + `given, active_count, completed, granted_sum` |
 | POST | `/api/bo/bonuses`, `/api/bo/bonuses/{id}` | Bonus fields incl. `max_bet` (create needs title, kind, trigger) | marketing/admin |

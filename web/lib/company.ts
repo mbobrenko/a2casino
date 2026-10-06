@@ -2,8 +2,8 @@
 // Everything in [square brackets] is a placeholder: fill it in here once and every page picks it up.
 // The legal texts are templates and must be reviewed by legal counsel before launch.
 
-export const LEGAL_UPDATED = "2026-10-05";
-export const LEGAL_UPDATED_TEXT = "5 October 2026";
+export const LEGAL_UPDATED = "2026-10-06";
+export const LEGAL_UPDATED_TEXT = "6 October 2026";
 export const LEGAL_NOTICE = "Template — to be reviewed by legal counsel before launch.";
 
 export const COMPANY = {
@@ -71,6 +71,8 @@ export const RULES = {
   /** Default maximum bet while a bonus is active; each offer can set its own. */
   bonusMaxBet: "$5.00",
   minDiceBet: "$0.10",
+  /** Default maximum win per bet in the A2 Originals (games.max_win; the pages show the live value). */
+  originalsMaxWin: "$10,000.00",
   minRewardClaim: "$1.00",
   cryptoConfirmations: 3,
   sessionHours: 24,
@@ -89,7 +91,7 @@ export type LegalPageInfo = { slug: string; title: string; summary: string };
 export const LEGAL_PAGES: LegalPageInfo[] = [
   { slug: "terms", title: "Terms & Conditions", summary: "The agreement between you and us: accounts, eligibility, play, payments, closure and liability." },
   { slug: "bonus-terms", title: "Bonus Terms", summary: "How bonuses, free spins, wagering, expiry and promo codes work." },
-  { slug: "game-rules", title: "Game Rules & RTP", summary: "General game rules, return-to-player figures and how our provably fair Dice works." },
+  { slug: "game-rules", title: "Game Rules & RTP", summary: "General game rules, return-to-player figures, the RTP versions and maximum win of our own games and how to verify them." },
   { slug: "privacy", title: "Privacy Policy", summary: "What personal data we collect, why, who we share it with and your rights." },
   { slug: "cookies", title: "Cookie Policy", summary: "Cookies and browser storage used on the website." },
   { slug: "responsible-gaming", title: "Responsible Gaming", summary: "Staying in control, warning signs, self-exclusion and where to get help." },
