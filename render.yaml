@@ -83,3 +83,18 @@ services:
         value: https://a2casino-mb-api.onrender.com
       - key: PORT
         value: "10000"
+
+  # Spanish casino-affiliate review site (affiliate/): plain static export, free static hosting.
+  - type: web
+    name: a2casino-mb-reviews
+    runtime: static
+    rootDir: affiliate
+    buildCommand: npm ci && npm run build
+    staticPublishPath: out
+    envVars:
+      - key: NEXT_PUBLIC_SITE_URL
+        value: https://a2casino-mb-reviews.onrender.com
+      - key: NEXT_PUBLIC_AFF_SUBID
+        value: a2mb
+      - key: NODE_VERSION
+        value: "22"
