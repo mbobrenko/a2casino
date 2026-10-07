@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, Game } from "@/lib/api";
 import { balanceChanged, useMe } from "@/lib/useMe";
-import Dice from "@/components/Dice";
+import Dice from "@/components/originals/Dice";
 import Crash from "@/components/originals/Crash";
 import Mines from "@/components/originals/Mines";
 import Plinko from "@/components/originals/Plinko";

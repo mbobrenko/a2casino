@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import RealityCheck from "@/components/RealityCheck";
 import { LEGAL_PAGES } from "@/lib/company";
 import "./globals.css";
+import "./originals.css";
 
 // Display face for game titles and headings (self-hosted by next/font at build time).
 const display = Lilita_One({ weight: "400", subsets: ["latin"], display: "swap", variable: "--font-display" });
