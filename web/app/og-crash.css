@@ -1,0 +1,93 @@
+/* ---------------------------------------------------------------------------------------------
+   Crash presentation layer (on top of the shared shell in originals.css). Selectors are scoped
+   under .og-shell so they win over the base .crash-* rules regardless of stylesheet order.
+   --------------------------------------------------------------------------------------------- */
+.og-shell .crash-stage { background: #0d0a24; overflow: hidden; }
+.og-shell .crash-canvas { will-change: transform; }
+
+.og-shell .crash-vignette {
+  position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(120% 90% at 50% 45%, transparent 55%, rgba(5, 3, 14, .7) 100%);
+}
+
+/* Full-stage flashes: green when the auto cash-out fires, red when the rocket blows up. */
+.og-shell .crash-flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; }
+.og-shell .crash-flash.g { background: radial-gradient(60% 60% at 50% 50%, rgba(31, 224, 122, .28), rgba(31, 224, 122, .08) 60%, transparent); }
+.og-shell .crash-flash.r { background: radial-gradient(70% 70% at 50% 50%, rgba(255, 61, 90, .32), rgba(255, 61, 90, .1) 60%, transparent); }
+.og-shell .crash-flash.g.go { animation: crash-flash .7s ease-out; }
+.og-shell .crash-stage.lost .crash-flash.r { animation: crash-flash .6s ease-out; }
+@keyframes crash-flash { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }
+
+/* Stage shake on the explosion (stronger when the bet was lost). */
+.og-shell .crash-stage.lost .crash-canvas { animation: crash-shake .5s cubic-bezier(.36, .07, .19, .97); }
+.og-shell .crash-stage.won .crash-canvas { animation: crash-shake-soft .4s cubic-bezier(.36, .07, .19, .97); }
+@keyframes crash-shake {
+  10%, 90% { transform: translate(-2px, 1px); }
+  20%, 80% { transform: translate(4px, -2px); }
+  30%, 50%, 70% { transform: translate(-7px, 3px) rotate(-.4deg); }
+  40%, 60% { transform: translate(7px, -3px) rotate(.4deg); }
+}
+@keyframes crash-shake-soft { 25% { transform: translate(-3px, 1px); } 50% { transform: translate(3px, -1px); } 75% { transform: translate(-2px, 1px); } }
+
+/* HUD */
+.og-shell .crash-hud { z-index: 2; }
+.og-shell .crash-mult {
+  --ms: 1; --mc: #ffffff; --mg: rgba(110, 255, 196, .35);
+  position: relative; transform: scale(var(--ms)); transform-origin: 50% 40%; transition: color .25s, text-shadow .25s;
+  color: var(--mc); letter-spacing: .01em;
+  text-shadow: 0 4px 0 rgba(0, 0, 0, .35), 0 0 28px var(--mg), 0 0 60px var(--mg);
+}
+.og-shell .crash-stage.flying .crash-mult { color: var(--mc); }
+.og-shell .crash-mult[data-tier="0"] { --mc: #f4fffa; --mg: rgba(110, 255, 196, .45); }
+.og-shell .crash-mult[data-tier="1"] { --mc: #ffe08a; --mg: rgba(255, 196, 70, .55); }
+.og-shell .crash-mult[data-tier="2"] { --mc: #ffb36b; --mg: rgba(255, 120, 60, .6); }
+.og-shell .crash-mult[data-tier="3"] { --mc: #ff8fd8; --mg: rgba(255, 72, 196, .7); }
+.og-shell .crash-stage.flying .crash-mult[data-tier="3"] { animation: crash-hot 0.5s ease-in-out infinite alternate; }
+.og-shell .crash-mult.bump { animation: crash-bump .35s cubic-bezier(.2, 1.6, .4, 1); }
+.og-shell .crash-stage.flying .crash-mult[data-tier="3"].bump { animation: crash-bump .35s cubic-bezier(.2, 1.6, .4, 1), crash-hot .5s .35s ease-in-out infinite alternate; }
+@keyframes crash-bump { 0% { scale: 1; } 40% { scale: 1.16; } 100% { scale: 1; } }
+@keyframes crash-hot { to { text-shadow: 0 4px 0 rgba(0, 0, 0, .35), 0 0 40px rgba(255, 72, 196, .9), 0 0 90px rgba(255, 72, 196, .55); } }
+.og-shell .crash-stage.lost .crash-mult { color: var(--og-red); text-shadow: 0 4px 0 rgba(0, 0, 0, .35), 0 0 34px rgba(255, 61, 90, .7); animation: crash-dead .5s cubic-bezier(.2, 1.4, .4, 1); }
+.og-shell .crash-stage.won .crash-mult { color: var(--og-green); text-shadow: 0 4px 0 rgba(0, 0, 0, .35), 0 0 34px rgba(31, 224, 122, .6); }
+@keyframes crash-dead { 0% { scale: 1.25; } 30% { translate: -6px 0; } 50% { translate: 6px 0; } 70% { translate: -3px 0; } 100% { scale: 1; translate: 0 0; } }
+
+.og-shell .crash-sub { background: none; padding: 0; backdrop-filter: none; min-height: 30px; display: flex; align-items: center; }
+.og-shell .crash-sub > span {
+  display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px; font-size: 13.5px; font-weight: 700;
+  background: rgba(16, 12, 36, .72); border: 1px solid rgba(160, 140, 255, .22); backdrop-filter: blur(6px); color: #c9c1ef;
+  box-shadow: 0 8px 24px -10px rgba(0, 0, 0, .7);
+  animation: pop .3s var(--ease-out);
+}
+.og-shell .crash-ready i { width: 8px; height: 8px; border-radius: 50%; background: #6effc4; box-shadow: 0 0 0 0 rgba(110, 255, 196, .6); animation: crash-ping 1.6s infinite; }
+@keyframes crash-ping { 0% { box-shadow: 0 0 0 0 rgba(110, 255, 196, .6); } 70%, 100% { box-shadow: 0 0 0 9px rgba(110, 255, 196, 0); } }
+.og-shell .crash-chip b { color: #fff; font-variant-numeric: tabular-nums; }
+.og-shell .crash-sub > .crash-tag { color: #ffb3c0; border-color: rgba(255, 61, 90, .45); background: rgba(48, 8, 20, .78); text-transform: uppercase; letter-spacing: .06em; font-size: 12.5px; }
+.og-shell .crash-res { backdrop-filter: blur(6px); box-shadow: 0 10px 30px -12px rgba(0, 0, 0, .8); }
+.og-shell .crash-res.w { background: linear-gradient(180deg, rgba(31, 224, 122, .28), rgba(16, 120, 70, .3)); color: #c8ffe0; border-color: rgba(61, 255, 156, .6); box-shadow: 0 0 24px -4px rgba(31, 224, 122, .45); }
+
+/* "Cashed out @ x" badge: placed at the rocket by script, then floats up and fades. */
+.og-shell .crash-cash {
+  position: absolute; z-index: 3; left: 0; top: 0; pointer-events: none; opacity: 0; white-space: nowrap;
+  padding: 8px 14px; border-radius: 999px; font: 800 13px/1 system-ui, sans-serif; color: #04260f; font-variant-numeric: tabular-nums;
+  background: linear-gradient(180deg, #7dffbd, #1fe07a 55%, #11b862);
+  box-shadow: 0 0 0 3px rgba(31, 224, 122, .25), 0 10px 26px -6px rgba(31, 224, 122, .7), inset 0 1px 0 rgba(255, 255, 255, .7);
+  transform: translate(-50%, -50%);
+}
+.og-shell .crash-cash.go { animation: crash-cash 1.6s cubic-bezier(.2, .9, .3, 1) forwards; }
+@keyframes crash-cash {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.3); }
+  12% { opacity: 1; transform: translate(-50%, -120%) scale(1.12); }
+  22% { transform: translate(-50%, -140%) scale(1); }
+  75% { opacity: 1; transform: translate(-50%, -260%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -320%) scale(.95); }
+}
+
+@media (max-width: 640px) {
+  .og-shell .crash-sub > span { font-size: 12px; padding: 6px 11px; }
+  .og-shell .crash-cash { font-size: 12px; padding: 7px 11px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .og-shell .crash-stage .crash-canvas, .og-shell .crash-mult, .og-shell .crash-ready i { animation: none !important; }
+  .og-shell .crash-cash.go { animation: crash-cash-still 1.6s forwards; }
+  @keyframes crash-cash-still { 0%, 80% { opacity: 1; transform: translate(-50%, -150%); } 100% { opacity: 0; transform: translate(-50%, -150%); } }
+}
