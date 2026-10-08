@@ -1,7 +1,9 @@
 "use client";
 // Dice: roll 0.00–99.99, win if the roll is under the target (the API only offers "roll under").
-// A big 0–100 slider with win / lose zones, a draggable handle and a result marker that slides to
-// the roll; Multiplier, Roll under and Win chance stay in sync.
+// A tumbling 3D die and a counting readout over a ticked 0–100 slider with win / lose zones, a
+// chunky draggable handle and a result pin that slides (with a motion trail) to the roll and lands
+// with a bounce; recent rolls stack in the corner. Multiplier, Roll under and Win chance stay in sync.
+import "@/app/og-dice.css";
 import { useEffect, useRef, useState } from "react";
 import { api, money } from "@/lib/api";
 import { balanceChanged } from "@/lib/useMe";
@@ -116,6 +118,16 @@ export default function Dice({ rtp: initialRtp, maxWin: initialMax }: { rtp: num
   const won = result && !rolling ? result.win > 0 : null;
   const pos = shown ?? null;
 
+  // Presentation only: remember the previous frame's marker position (for the motion trail) and keep
+  // a short list of recent rolls for the in-stage history.
+  const prevPos = useRef<number | null>(null);
+  useEffect(() => { prevPos.current = pos; });
+  const [hist, setHist] = useState<{ k: number; roll: number; win: boolean }[]>([]);
+  useEffect(() => {
+    if (rolling || !result) return;
+    setHist((h) => (h[0]?.k === refresh ? h : [{ k: refresh, roll: result.roll, win: result.win > 0 }, ...h].slice(0, 8)));
+  }, [rolling, result, refresh]);
+
   const controls = (
     <>
       <BetInput value={amount} onChange={setAmount} disabled={busy} max={max} />
@@ -131,27 +143,68 @@ export default function Dice({ rtp: initialRtp, maxWin: initialMax }: { rtp: num
     </>
   );
 
+  const resCls = won === true ? " win" : won === false ? " lose" : "";
+  const shownTxt = pos != null ? pos.toFixed(2) : "50.00";
+  const [intPart, decPart] = shownTxt.split(".");
+  const face = result ? dieFace(result.roll) : 5;
+  // Motion trail behind the pin while it slides: its length follows the per-frame speed.
+  const vel = rolling && pos != null && prevPos.current != null ? pos - prevPos.current : 0;
+  const trail = Math.min(16, Math.abs(vel) * 4.5);
+
   const stage = (
-    <div className="dice-stage">
-      <div className={"dice-readout" + (won === true ? " win" : won === false ? " lose" : "")}>
-        <span>{pos != null ? pos.toFixed(2) : "50.00"}</span>
-        <small>{result ? (rolling ? "Rolling" : won ? `You won ${money(result.win)}${result.max_win_applied ? " · max win" : ""}` : `Roll under ${result.target} lost`) : "Win if the roll is under the target"}</small>
+    <div className={"dx-stage" + (rolling ? " rolling" : "") + resCls}>
+      <div className="dx-floor" aria-hidden />
+      <div className="dx-stars" aria-hidden />
+      <div className="dx-hist" aria-label="Recent rolls">
+        {hist.map((h, i) => (
+          <span key={h.k} className={"dx-hist-chip" + (h.win ? " w" : " l") + (i === 0 ? " fresh" : "")}>{h.roll.toFixed(2)}</span>
+        ))}
       </div>
-      <div className="dice-slider">
-        <div className="dice-scale" aria-hidden>{[0, 25, 50, 75, 100].map((n) => <span key={n} style={{ left: n + "%" }}>{n}</span>)}</div>
-        <div className="dice-rail">
-          <div ref={track} className="dice-track" onPointerDown={onDown} onPointerMove={(e) => e.buttons && !auto.running && fromPointer(e.clientX)}
+      <div className="dx-hero">
+        <div className="dx-die-wrap" aria-hidden>
+          <div key={"hop" + refresh} className={"dx-die-hop" + (refresh ? " go" : "")}>
+            <div className="dx-cube" style={{ "--rx": FACE_ROT[face][0] + "deg", "--ry": FACE_ROT[face][1] + "deg" } as React.CSSProperties}>
+              {[1, 2, 3, 4, 5, 6].map((f) => <DieFace key={f} n={f} />)}
+            </div>
+          </div>
+          <div key={"sh" + refresh} className={"dx-die-shadow" + (refresh ? " go" : "")} />
+        </div>
+        <div className={"dx-readout" + resCls + (rolling ? " rolling" : "")}>
+          <div key={rolling ? "r" : "d" + refresh} className="dx-num">
+            <span>{intPart}</span><span className="dec">.{decPart}</span>
+          </div>
+          <div className="dx-status">
+            {result
+              ? rolling ? <span className="dx-tag roll">Rolling…</span>
+                : won ? <span className="dx-tag w">Win +{money(result.win)}{result.max_win_applied ? " · max win" : ""}</span>
+                  : <span className="dx-tag l">Under {result.target} · no win</span>
+              : <span className="dx-tag">Win if the roll is under <b>{target}</b></span>}
+          </div>
+        </div>
+      </div>
+      <div className="dx-slider">
+        <div className="dx-rail">
+          <div ref={track} className={"dx-track" + resCls} onPointerDown={onDown} onPointerMove={(e) => e.buttons && !auto.running && fromPointer(e.clientX)}
             style={{ "--t": target + "%" } as React.CSSProperties}>
-            <div className="dice-zone win" />
-            <div className="dice-zone lose" />
-            <div className="dice-handle" role="slider" tabIndex={0} aria-label="Roll under target" aria-valuemin={2} aria-valuemax={98} aria-valuenow={target}
-              onKeyDown={onKey}><i /><i /><i /></div>
+            <div className="dx-zone win" />
+            <div className="dx-zone lose" />
+            {pos != null && trail > 0.3 && (
+              <div className={"dx-trail" + (vel < 0 ? " rev" : "")} style={{ left: (vel > 0 ? pos - trail : pos) + "%", width: trail + "%" }} />
+            )}
+            {pos != null && !rolling && result && <span key={"rip" + refresh} className={"dx-ripple" + resCls} style={{ left: pos + "%" }} />}
+            <div className={"dx-handle" + (auto.running ? " locked" : "")} role="slider" tabIndex={0} aria-label="Roll under target" aria-valuemin={2} aria-valuemax={98} aria-valuenow={target}
+              onKeyDown={onKey}><span className="dx-handle-lbl">{target}</span></div>
             {pos != null && (
-              <div className={"dice-marker" + (won === true ? " win" : won === false ? " lose" : "") + (rolling ? " moving" : "")} style={{ left: pos + "%" }}>
-                <div className="hex"><span>{pos.toFixed(2)}</span></div>
+              <div key={"pin" + (rolling ? "m" : refresh)} className={"dx-marker" + resCls + (rolling ? " moving" : " landed")} style={{ left: pos + "%" }}>
+                <div className="dx-pin"><span>{pos.toFixed(2)}</span></div>
               </div>
             )}
           </div>
+        </div>
+        <div className="dx-ticks" aria-hidden>
+          {Array.from({ length: 21 }, (_, k) => k * 5).map((v) => (
+            <span key={v} className={(v % 25 === 0 ? "major" : "") + (v < target ? " in" : "")} style={{ left: v + "%" }}>{v % 25 === 0 && <em>{v}</em>}</span>
+          ))}
         </div>
       </div>
       <div className="dice-fields">
@@ -164,6 +217,20 @@ export default function Dice({ rtp: initialRtp, maxWin: initialMax }: { rtp: num
 
   return (
     <GameShell game="dice" mode={mode} onMode={setMode} modeLocked={auto.running} controls={controls} stage={<>{stage}{fx.layer}</>} glow={fx.glow}
-      session={session} fair={{ refreshKey: refresh }} rtp={rtp} maxWin={maxWin} fmtPill={(r) => r.label ?? ""} />
+      stageClass="dx-bg" session={session} fair={{ refreshKey: refresh }} rtp={rtp} maxWin={maxWin} fmtPill={(r) => r.label ?? ""} />
+  );
+}
+
+/** Decorative die face for a roll: higher rolls land on more pips. */
+const dieFace = (roll: number) => Math.min(6, 1 + Math.floor((roll / 100) * 6));
+/** Cube rotation (x, y in degrees) that brings each face to the front. */
+const FACE_ROT: Record<number, [number, number]> = { 1: [0, 0], 2: [-90, 0], 3: [0, -90], 4: [0, 90], 5: [90, 0], 6: [0, 180] };
+const PIPS: Record<number, number[]> = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+
+function DieFace({ n }: { n: number }) {
+  return (
+    <div className={"dx-face f" + n}>
+      {Array.from({ length: 9 }, (_, k) => <i key={k} className={PIPS[n].includes(k) ? "on" : ""} />)}
+    </div>
   );
 }
