@@ -6,7 +6,7 @@ import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { api, money } from "@/lib/api";
 import { useMe } from "@/lib/useMe";
 import FairPanel, { FairGame, Pick } from "../FairPanel";
-import { fmtMult } from "./fx";
+import { fmtMult, reducedMotion } from "./fx";
 import { sfx, useSound } from "./sound";
 
 export const cents = (s: string) => Math.round((parseFloat(s) || 0) * 100);
@@ -263,6 +263,33 @@ export function GameShell({ game, mode, onMode, modeLocked, controls, stage, sta
   const [pick, setPick] = useState<Pick | null>(null);
   const fairRef = useRef<HTMLDivElement>(null);
   const { stats } = session;
+  const [splash, setSplash] = useState(true);
+  const [full, setFull] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setSplash(false), reducedMotion() ? 300 : 1500); return () => clearTimeout(t); }, []);
+  useEffect(() => {
+    if (!full) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFull(false); };
+    const onFs = () => { if (!document.fullscreenElement) setFull(false); };
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("fullscreenchange", onFs);
+    document.documentElement.classList.add("og-noscroll");
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("fullscreenchange", onFs);
+      document.documentElement.classList.remove("og-noscroll");
+    };
+  }, [full]);
+  // Full screen: the shell covers the page (works everywhere, iPhone included) and, where the
+  // browser allows it, the page also goes native full screen to hide the browser's own bars.
+  const toggleFull = () => {
+    sfx.click();
+    const next = !full;
+    setFull(next);
+    try {
+      if (next) document.documentElement.requestFullscreen?.().catch(() => {});
+      else if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    } catch { /* not supported */ }
+  };
   const openPick = (r: Res) => {
     if (!r.pick) return;
     setPick({ ...r.pick });
@@ -270,7 +297,7 @@ export function GameShell({ game, mode, onMode, modeLocked, controls, stage, sta
     setTimeout(() => fairRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
   };
   return (
-    <section className={"og-shell og-" + game}>
+    <section className={"og-shell og-" + game + (full ? " full" : "")}>
       <div className="og-main">
         <aside className="og-side">
           <div className="og-tabs" role="tablist">
@@ -282,8 +309,14 @@ export function GameShell({ game, mode, onMode, modeLocked, controls, stage, sta
           <div className="og-controls">{controls}</div>
         </aside>
         <div className="og-stage-col">
-          <ResultStrip results={session.results} onPick={openPick} fmt={fmtPill} />
-          <div className={"og-stage " + stageClass + (glow ? " glow-" + glow : "")}>{stage}</div>
+          <div className="og-top">
+            <Wordmark game={game} />
+            <ResultStrip results={session.results} onPick={openPick} fmt={fmtPill} />
+          </div>
+          <div className={"og-stage " + stageClass + (glow ? " glow-" + glow : "")}>
+            {stage}
+            {splash && <Splash game={game} onSkip={() => setSplash(false)} />}
+          </div>
           <div className="og-bar">
             <div className="og-stats">
               <div><small>Bets</small><b>{stats.bets}</b></div>
@@ -298,6 +331,10 @@ export function GameShell({ game, mode, onMode, modeLocked, controls, stage, sta
                 title={sound ? "Sound on" : "Sound off"} onClick={() => { setSound(!sound); }}>
                 <SpeakerIcon on={sound} />
               </button>
+              <button type="button" className={"og-icon-btn" + (full ? " on" : "")} aria-pressed={full} aria-label={full ? "Exit full screen" : "Full screen"}
+                title={full ? "Exit full screen" : "Full screen"} onClick={toggleFull}>
+                <FullIcon on={full} />
+              </button>
               <button type="button" className={"og-icon-btn fair-btn" + (fairOpen ? " on" : "")} aria-expanded={fairOpen} onClick={() => setFairOpen((o) => !o)}>
                 <ShieldIcon /> <span>Fairness</span>
               </button>
@@ -310,6 +347,55 @@ export function GameShell({ game, mode, onMode, modeLocked, controls, stage, sta
         <FairPanel game={game} refreshKey={fair.refreshKey} pick={pick} locked={fair.locked} rtp={rtp} />
       </div>
     </section>
+  );
+}
+
+export const GAME_TITLE: Record<FairGame, string> = { dice: "Dice", crash: "Crash", mines: "Mines", plinko: "Plinko" };
+
+/** The A2 Labs studio mark: a neon hexagon with "A2". */
+export function LabsMark({ size = 28 }: { size?: number }) {
+  return (
+    <svg className="og-mark" width={size} height={size} viewBox="0 0 48 48" aria-hidden>
+      <defs>
+        <linearGradient id="og-mark-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#7cf7c4" /><stop offset=".5" stopColor="#7c5cff" /><stop offset="1" stopColor="#ff5fa2" /></linearGradient>
+      </defs>
+      <path d="M24 3 42 13.5v21L24 45 6 34.5v-21z" fill="#120f26" stroke="url(#og-mark-g)" strokeWidth="3" strokeLinejoin="round" />
+      <text x="24" y="30.5" textAnchor="middle" fontFamily="var(--font-display-stack)" fontSize="17" fill="url(#og-mark-g)">A2</text>
+    </svg>
+  );
+}
+
+/** The game's logo above the stage: studio mark, "A2 LABS" and the game name. */
+function Wordmark({ game }: { game: FairGame }) {
+  return (
+    <div className="og-wordmark">
+      <LabsMark />
+      <div className="og-wm-text"><small>A2 Labs</small><b>{GAME_TITLE[game]}</b></div>
+      <span className="og-wm-pf" title="Every result can be verified in Fairness"><ShieldIcon /> Provably fair</span>
+    </div>
+  );
+}
+
+/** Loading screen shown over the stage when the game opens: studio logo, game name, progress bar. */
+function Splash({ game, onSkip }: { game: FairGame; onSkip: () => void }) {
+  return (
+    <div className="og-splash" onClick={onSkip}>
+      <div className="og-splash-in">
+        <LabsMark size={72} />
+        <div className="og-splash-studio">A2 Labs</div>
+        <div className="og-splash-title">{GAME_TITLE[game]}</div>
+        <div className="og-splash-bar"><i /></div>
+        <div className="og-splash-pf"><ShieldIcon /> Provably fair · Verifiable results</div>
+      </div>
+    </div>
+  );
+}
+
+function FullIcon({ on }: { on: boolean }) {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {on ? <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /> : <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />}
+    </svg>
   );
 }
 
