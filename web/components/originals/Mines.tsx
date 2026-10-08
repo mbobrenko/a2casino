@@ -1,6 +1,8 @@
 "use client";
-// Mines: 5×5 bevelled tiles that flip to a glowing gem or a bomb; the board is revealed with a
-// stagger when the round ends. Auto mode plays a preset selection of tiles each round.
+// Mines: 5×5 glossy raised tiles that flip in 3D into a recessed cell holding a faceted gem or a
+// mine; the rest of the board is revealed in a dimmed wave when the round ends. Auto mode plays a
+// preset selection of tiles each round.
+import "@/app/og-mines.css";
 import { useEffect, useRef, useState } from "react";
 import { api, money } from "@/lib/api";
 import { minesMultiplier } from "@/lib/fair";
@@ -160,39 +162,71 @@ export default function Mines({ rtp: gameRtp, maxWin: gameMax }: { rtp: number; 
   );
 
   const order = round?.mines_positions ? revealOrder(last) : null;
+  const gemsTotal = 25 - mines;
+  const hudMult = round && round.status !== "lost" ? round.multiplier : 1;
+  const hudNext = nextMult ? nextMult.toFixed(2) + "×" : "—";
   const stage = (
-    <div className={"mines-stage" + (ended ? " ended " + round!.status : "")}>
-      <div className={"mines-board2" + (round?.status === "lost" ? " shake" : "")}>
-        {Array.from({ length: 25 }, (_, i) => {
-          const revealed = round?.revealed.includes(i);
-          const mine = round?.mines_positions?.includes(i);
-          const showAll = ended && round?.mines_positions;
-          const face = revealed || showAll ? (mine ? "bomb" : "gem") : "";
-          const picked = mode === "auto" && selected.includes(i) && !open && !revealed;
-          const cls = ["mt", face && "flip", face, revealed ? "hit" : face ? "ghost" : "", last === i && "last", picked && "sel"].filter(Boolean).join(" ");
-          const delay = !revealed && order ? order[i] * 28 : 0;
-          const clickable = mode === "manual" ? open && !revealed && !busy : !auto.running && !open;
-          return (
-            <button key={i} type="button" className={cls} style={{ "--d": delay + "ms" } as React.CSSProperties} aria-label={`Tile ${i + 1}${face ? ": " + face : ""}`}
-              disabled={!clickable} onClick={() => (mode === "manual" ? reveal(i) : toggleSel(i))}>
-              <span className="mt-face back" />
-              <span className="mt-face front">{face === "gem" ? <Gem /> : face === "bomb" ? <Bomb boom={!!revealed} /> : null}</span>
-            </button>
-          );
-        })}
+    <div className={"mx-stage" + (ended ? " ended " + round!.status : open ? " live" : "")}>
+      <MinesDefs />
+      <div className="mx-amb" aria-hidden>
+        {Array.from({ length: 12 }, (_, i) => <i key={i} style={{ "--i": i } as React.CSSProperties} />)}
+      </div>
+      {round?.status === "lost" && <div key={"flash" + round.id} className="mx-flash" aria-hidden />}
+      <div className="mx-hud" aria-hidden>
+        <div className="mx-chip mines"><MiniMine /><b>{mines}</b><small>mines</small></div>
+        <div className="mx-chip gems">
+          <MiniGem /><b>{n}<em>/{gemsTotal}</em></b>
+          <span className="mx-prog"><span style={{ width: (n / gemsTotal) * 100 + "%" }} /></span>
+        </div>
+        <div key={"m" + n + "-" + (round?.id ?? 0)} className={"mx-chip mult" + (open && n > 0 ? " pop" : "")}>
+          <small>{open || ended ? "Multiplier" : mode === "auto" ? "Pays" : "First gem"}</small><b>{open || ended ? hudMult.toFixed(2) + "×" : hudNext}</b>
+        </div>
+        {open && <div key={"n" + n} className="mx-chip next pop"><small>Next gem</small><b>{hudNext}</b></div>}
+      </div>
+      <div className="mx-frame">
+        <i className="mx-stud tl" /><i className="mx-stud tr" /><i className="mx-stud bl" /><i className="mx-stud br" />
+        <div className={"mx-board" + (round?.status === "lost" ? " shake" : "") + (round?.status === "cashed" ? " cashed" : "")}>
+          {Array.from({ length: 25 }, (_, i) => {
+            const revealed = round?.revealed.includes(i);
+            const mine = round?.mines_positions?.includes(i);
+            const showAll = ended && round?.mines_positions;
+            const face = revealed || showAll ? (mine ? "bomb" : "gem") : "";
+            const picked = mode === "auto" && selected.includes(i) && !open && !revealed;
+            const cls = ["mx-tile", face && "flip", face, revealed ? "hit" : face ? "ghost" : "", last === i && "last", picked && "sel"].filter(Boolean).join(" ");
+            const delay = !revealed && order ? 160 + order[i] * 34 : 0;
+            const clickable = mode === "manual" ? open && !revealed && !busy : !auto.running && !open;
+            const g = revealed ? round!.revealed.indexOf(i) : 0;
+            return (
+              <button key={i} type="button" className={cls} style={{ "--d": delay + "ms", "--g": g } as React.CSSProperties}
+                aria-label={`Tile ${i + 1}${face ? ": " + face : ""}`} disabled={!clickable} onClick={() => (mode === "manual" ? reveal(i) : toggleSel(i))}>
+                <span className="mx-inner">
+                  <span className="mx-face mx-cover"><span className="mx-sheen" /><span className="mx-mark" /></span>
+                  <span className="mx-face mx-cell">
+                    {face === "gem" ? <Gem /> : face === "bomb" ? <Mine boom={!!revealed} /> : null}
+                    {revealed && face === "gem" && <Burst kind="gem" />}
+                    {revealed && face === "bomb" && <><span className="mx-shock" /><span className="mx-shock two" /><Burst kind="fire" /></>}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
       {ended && round && (
-        <div className={"mines-banner " + round.status}>
-          {round.status === "cashed" ? <><b>{round.multiplier.toFixed(2)}×</b><span>+{money(round.win)}{round.max_win_reached ? " · max win" : ""}</span></> : <><b>Boom</b><span>{n - 1} gem{n - 1 === 1 ? "" : "s"} found</span></>}
+        <div className={"mx-banner " + round.status}>
+          {round.status === "cashed"
+            ? <><small>Cashed out</small><b>{round.multiplier.toFixed(2)}×</b><span>+{money(round.win)}{round.max_win_reached ? " · max win" : ""}</span></>
+            : <><small>Mine hit</small><b>Boom!</b><span>{n - 1} gem{n - 1 === 1 ? "" : "s"} found</span></>}
         </div>
       )}
-      {!round && mode === "manual" && <div className="mines-hint">Choose your mines and press Bet</div>}
+      {!round && mode === "manual" && <div className="mx-hint">Choose your mines and press <b>Bet</b></div>}
+      {mode === "auto" && !open && !auto.running && selected.length === 0 && <div className="mx-hint">Tap tiles to pick them for auto-bet</div>}
     </div>
   );
 
   return (
     <GameShell game="mines" mode={mode} onMode={setMode} modeLocked={auto.running || open} controls={controls} stage={<>{stage}{fx.layer}</>} glow={fx.glow}
-      session={session} fair={{ refreshKey: refresh, locked: open }} rtp={rtp} maxWin={maxWin} />
+      stageClass="mx-bg" session={session} fair={{ refreshKey: refresh, locked: open }} rtp={rtp} maxWin={maxWin} />
   );
 }
 
@@ -203,31 +237,82 @@ function revealOrder(from: number | null) {
   return Array.from({ length: 25 }, (_, i) => Math.hypot((i % 5) - cx, Math.floor(i / 5) - cy) * 2.2);
 }
 
+/** Shared gradients for every gem / mine on the board (one copy in the DOM). */
+function MinesDefs() {
+  return (
+    <svg className="mx-defs" width="0" height="0" aria-hidden focusable="false">
+      <defs>
+        <linearGradient id="mxGloss" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff" stopOpacity=".75" /><stop offset=".45" stopColor="#fff" stopOpacity=".08" /><stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+        <radialGradient id="mxMine" cx=".36" cy=".32" r=".75">
+          <stop offset="0" stopColor="#8a8fa8" /><stop offset=".45" stopColor="#3a3d52" /><stop offset="1" stopColor="#08090f" />
+        </radialGradient>
+        <radialGradient id="mxCore" cx=".5" cy=".5" r=".5">
+          <stop offset="0" stopColor="#fff6c9" /><stop offset=".4" stopColor="#ff5a3c" /><stop offset="1" stopColor="#ff2d55" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+    </svg>
+  );
+}
+
+/** Brilliant-cut emerald: flat facets in graded greens, a gloss pass and two twinkling glints. */
 function Gem() {
   return (
-    <svg viewBox="0 0 64 64" className="gem-svg" aria-hidden>
-      <defs>
-        <linearGradient id="gm1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#b6ffe0" /><stop offset="1" stopColor="#11c98a" /></linearGradient>
-        <linearGradient id="gm2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#3dfcb4" /><stop offset="1" stopColor="#048a5c" /></linearGradient>
-      </defs>
-      <path d="M14 22 22 10h20l8 12-18 32z" fill="url(#gm2)" />
-      <path d="M14 22h36L32 54z" fill="url(#gm1)" opacity=".85" />
-      <path d="M22 10 26 22 32 10 38 22 42 10" fill="none" stroke="#e9fff6" strokeWidth="1.5" opacity=".8" />
-      <path d="M14 22h36M26 22l6 32 6-32" fill="none" stroke="#e9fff6" strokeWidth="1.2" opacity=".55" />
-      <circle cx="24" cy="16" r="2" fill="#fff" />
+    <svg viewBox="0 0 64 64" className="mx-gem" aria-hidden>
+      <g className="mx-gem-body">
+        <path d="M6 25 18 13 24 25z" fill="#7dfbc9" />
+        <path d="M18 13h14l-8 12z" fill="#c6ffe8" />
+        <path d="M32 13 40 25H24z" fill="#9dfdd6" />
+        <path d="M32 13h14l-6 12z" fill="#5ef0b4" />
+        <path d="M46 13 58 25H40z" fill="#25d394" />
+        <path d="M6 25h18l8 33z" fill="#2fe3a0" />
+        <path d="M24 25h16l-8 33z" fill="#16c584" />
+        <path d="M40 25h18L32 58z" fill="#078f5e" />
+        <path d="M6 25 18 13h28l12 12-26 33z" fill="url(#mxGloss)" opacity=".55" />
+        <path d="M6 25 18 13h28l12 12-26 33zM6 25h52M24 25l8 33 8-33M18 13l6 12 8-12 8 12 6-12" fill="none" stroke="#eafff6" strokeWidth="1" strokeLinejoin="round" opacity=".7" />
+      </g>
+      <path className="mx-glint a" d="M20 8l1.6 4.4L26 14l-4.4 1.6L20 20l-1.6-4.4L14 14l4.4-1.6z" fill="#fff" />
+      <path className="mx-glint b" d="M50 30l1.1 3L54 34l-2.9 1.1L50 38l-1.1-2.9L46 34l2.9-1z" fill="#fff" />
     </svg>
   );
 }
-function Bomb({ boom }: { boom: boolean }) {
+
+/** Naval mine: spiked sphere with a glowing core. */
+function Mine({ boom }: { boom: boolean }) {
   return (
-    <svg viewBox="0 0 64 64" className={"bomb-svg" + (boom ? " boom" : "")} aria-hidden>
-      {boom && <g className="blast"><circle cx="32" cy="34" r="28" fill="#ff7a3d" opacity=".35" /><path d="M32 4l5 14 12-9-4 14 15-1-12 9 12 9-15-1 4 14-12-9-5 14-5-14-12 9 4-14-15 1 12-9-12-9 15 1-4-14 12 9z" fill="#ffb347" opacity=".55" /></g>}
-      <defs><radialGradient id="bm1" cx=".35" cy=".35" r=".7"><stop offset="0" stopColor="#6b6f86" /><stop offset="1" stopColor="#0d0e17" /></radialGradient></defs>
-      <circle cx="30" cy="36" r="17" fill="url(#bm1)" />
-      <rect x="35" y="15" width="9" height="8" rx="2" transform="rotate(35 39 19)" fill="#3a3d52" />
-      <path d="M42 15c3-5 8-5 10-2" fill="none" stroke="#c9a46a" strokeWidth="2.5" strokeLinecap="round" />
-      <circle cx="53" cy="12" r="3.5" fill="#ffd166" /><circle cx="53" cy="12" r="1.6" fill="#fff" />
-      <circle cx="24" cy="30" r="4" fill="#fff" opacity=".25" />
+    <svg viewBox="0 0 64 64" className={"mx-mine" + (boom ? " boom" : "")} aria-hidden>
+      {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => (
+        <g key={a} transform={`rotate(${a} 32 33)`}>
+          <rect x="30" y="8" width="4" height="10" rx="1.5" fill="#2b2d3d" />
+          <circle cx="32" cy="8.5" r="3" fill="#565a73" />
+        </g>
+      ))}
+      <circle cx="32" cy="33" r="17" fill="url(#mxMine)" />
+      <circle cx="32" cy="33" r="17" fill="none" stroke="#000" strokeOpacity=".4" />
+      <circle className="mx-core" cx="32" cy="33" r="7" fill="url(#mxCore)" />
+      <circle cx="32" cy="33" r="2.6" fill="#ffe7a8" />
+      <ellipse cx="25" cy="25" rx="5" ry="3.2" transform="rotate(-35 25 25)" fill="#fff" opacity=".35" />
     </svg>
   );
 }
+
+/** One-shot particle pop (CSS only): sparks fly out from the tile centre. */
+function Burst({ kind }: { kind: "gem" | "fire" }) {
+  const count = kind === "gem" ? 10 : 14;
+  return (
+    <span className={"mx-burst " + kind} aria-hidden>
+      {Array.from({ length: count }, (_, k) => (
+        <i key={k} style={{ "--a": (360 / count) * k + (k % 2 ? 12 : 0) + "deg", "--r": (kind === "gem" ? 34 : 50) + (k % 3) * 10 + "px" } as React.CSSProperties} />
+      ))}
+    </span>
+  );
+}
+
+const MiniGem = () => (
+  <svg viewBox="0 0 64 64" width="16" height="16" aria-hidden><path d="M6 25 18 13h28l12 12-26 33z" fill="#2fe3a0" /><path d="M6 25h52L32 58z" fill="#0aa56c" /></svg>
+);
+const MiniMine = () => (
+  <svg viewBox="0 0 64 64" width="16" height="16" aria-hidden><circle cx="32" cy="34" r="18" fill="#ff4d6d" /><path d="M32 6v10M32 52v8M4 34h10M50 34h10M12 14l7 7M45 47l7 7M52 14l-7 7M19 47l-7 7" stroke="#ff4d6d" strokeWidth="6" strokeLinecap="round" /></svg>
+);
+
