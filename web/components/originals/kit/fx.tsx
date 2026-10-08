@@ -57,7 +57,8 @@ export function useFx() {
     later(() => setGlow(""), 500);
   }, []);
 
-  const clear = useCallback(() => { setPop(null); setCel(null); }, []);
+  // A new bet clears the small pop but lets a big-win celebration finish (a tap skips it).
+  const clear = useCallback(() => { setPop(null); }, []);
 
   const layer = (
     <div className="fx-layer" aria-live="polite">

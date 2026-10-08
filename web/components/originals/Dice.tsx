@@ -118,15 +118,9 @@ export default function Dice({ rtp: initialRtp, maxWin: initialMax }: { rtp: num
   const won = result && !rolling ? result.win > 0 : null;
   const pos = shown ?? null;
 
-  // Presentation only: remember the previous frame's marker position (for the motion trail) and keep
-  // a short list of recent rolls for the in-stage history.
+  // Presentation only: remember the previous frame's marker position (for the motion trail).
   const prevPos = useRef<number | null>(null);
   useEffect(() => { prevPos.current = pos; });
-  const [hist, setHist] = useState<{ k: number; roll: number; win: boolean }[]>([]);
-  useEffect(() => {
-    if (rolling || !result) return;
-    setHist((h) => (h[0]?.k === refresh ? h : [{ k: refresh, roll: result.roll, win: result.win > 0 }, ...h].slice(0, 8)));
-  }, [rolling, result, refresh]);
 
   const controls = (
     <>
@@ -155,11 +149,6 @@ export default function Dice({ rtp: initialRtp, maxWin: initialMax }: { rtp: num
     <div className={"dx-stage" + (rolling ? " rolling" : "") + resCls}>
       <div className="dx-floor" aria-hidden />
       <div className="dx-stars" aria-hidden />
-      <div className="dx-hist" aria-label="Recent rolls">
-        {hist.map((h, i) => (
-          <span key={h.k} className={"dx-hist-chip" + (h.win ? " w" : " l") + (i === 0 ? " fresh" : "")}>{h.roll.toFixed(2)}</span>
-        ))}
-      </div>
       <div className="dx-hero">
         <div className="dx-die-wrap" aria-hidden>
           <div key={"hop" + refresh} className={"dx-die-hop" + (refresh ? " go" : "")}>

@@ -104,7 +104,7 @@ export default function Mines({ rtp: gameRtp, maxWin: gameMax }: { rtp: number; 
   };
   useHotkey(() => (mode === "auto" ? (auto.running ? auto.stop() : auto.start()) : manualAction()), mode === "auto" || !busy);
 
-  const n = round?.revealed.length ?? 0;
+  const n = round?.revealed.filter((i) => !round.mines_positions?.includes(i)).length ?? 0;
   const rtp = open ? round!.rtp : gameRtp;
   const maxWin = open ? round!.max_win : gameMax;
   const stake = cents(amount);
